@@ -110,6 +110,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba payments enable|status|send-link|webhook-handler`
 - `waba deploy render docker`
 - `waba logs tail`
+- `waba leads missed`
 
 Global flags:
 
@@ -248,6 +249,14 @@ Tail memory logs (redacted by default):
 waba logs tail --client acme --lines 200
 waba logs tail --client acme --follow
 waba logs tail --client acme --type inbound_message --follow
+```
+
+## Missed Leads (Ops)
+
+Find leads who messaged but did not get a reply yet (from local memory logs):
+
+```bash
+waba leads missed --client acme --since 24h --min-age 5m
 ```
 
 ## Google Sheets Sync (Fastest CRM Upsell)

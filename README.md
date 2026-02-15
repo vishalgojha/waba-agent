@@ -92,6 +92,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba analytics start`
 - `waba metrics --client acme --days 30`
 - `waba integrate google-sheets`
+- `waba integrate status|webhook|hubspot|zoho`
 - `waba sync leads --to sheets`
 - `waba cost estimate|actual`
 - `waba optout add|list|check|remove`
@@ -224,6 +225,35 @@ waba integrate google-sheets --client acme --apps-script-url "<WEB_APP_URL>" --t
 ```bash
 waba sync leads --to sheets --client acme --days 30
 ```
+
+## CRM Integrations (Major Upsell)
+
+Generic webhook sink:
+
+```bash
+waba integrate webhook --client acme --url "https://your-crm.example.com/waba" --test
+```
+
+HubSpot:
+
+```bash
+waba integrate hubspot --client acme --token "<HUBSPOT_PRIVATE_APP_TOKEN>" --test
+waba sync leads --to hubspot --client acme --days 30
+```
+
+Zoho (India DC default):
+
+```bash
+waba integrate zoho --client acme --token "<ZOHO_ACCESS_TOKEN>" --dc in --module Leads --test
+waba sync leads --to zoho --client acme --days 30
+```
+
+Auto-push from webhook:
+
+- By default, if any CRM integration is configured, the webhook server pushes `lead_qualified` when a flow reaches `end`.
+- Control via `~/.waba/context/<client>/client.json`:
+  - `integrations.autoPush.enabled` (default: auto if integrations exist)
+  - `integrations.autoPush.mode`: `flow_end` or `every_inbound`
 
 ## Opt-Out Compliance (Required)
 

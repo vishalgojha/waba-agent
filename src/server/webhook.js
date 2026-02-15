@@ -15,6 +15,7 @@ const { safeName } = require("../lib/memory");
 const { addOptout, isOptedOut } = require("../lib/optout-store");
 const { handleInboundWithFlow } = require("../lib/flow-engine");
 const { getClientConfig } = require("../lib/client-config");
+const { hasAnyCrm, pushLeadToCrm } = require("../lib/crm");
 
 function redactPhone(s) {
   const t = String(s || "");
@@ -297,8 +298,9 @@ async function startWebhookServer({
             null;
 
           let steps = null;
+          let flowRes = null;
           if (flowName) {
-            const flowRes = await handleInboundWithFlow({
+            flowRes = await handleInboundWithFlow({
               client: ctx.client,
               from,
               inboundText: textForIntent,
@@ -332,6 +334,34 @@ async function startWebhookServer({
               textForReply: textForIntent,
               replyOverride
             }).filter(Boolean);
+          }
+
+          // CRM auto-push (sellable): push on flow completion by default.
+          try {
+            const autoMode = clientCfg?.integrations?.autoPush?.mode || "flow_end"; // flow_end|every_inbound
+            const enabled = clientCfg?.integrations?.autoPush?.enabled;
+            const shouldAuto = enabled === undefined ? hasAnyCrm(clientCfg?.integrations) : !!enabled;
+            const flowCompleted = flowRes?.action === "end";
+            const shouldPush = shouldAuto && (autoMode === "every_inbound" || (autoMode === "flow_end" && flowCompleted));
+            if (shouldPush) {
+              const lead = {
+                event: flowCompleted ? "lead_qualified" : "lead_inbound",
+                client: ctx.client,
+                from,
+                phone: from,
+                intent,
+                ts: nowIso,
+                text: textForIntent,
+                flow: flowName || null,
+                fields: flowRes?.state?.data || null,
+                multimodal: { transcript, imageDesc }
+              };
+              const out = await pushLeadToCrm({ client: ctx.client, clientCfg, lead });
+              await ctx.appendMemory(ctx.client, { type: "crm_push", ok: out.ok, results: out.results, ts: nowIso, event: lead.event, from });
+              if (!out.ok) logger.warn(`CRM push failed for ${redactPhone(from)}`);
+            }
+          } catch (err) {
+            logger.warn(`CRM push error: ${err?.message || err}`);
           }
 
           if (!allowOutbound) {

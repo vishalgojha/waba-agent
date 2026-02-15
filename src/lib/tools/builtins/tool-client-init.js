@@ -32,6 +32,13 @@ function toolClientInit() {
           // welcome: { "name": "welcome_template_name", "language": "en" }
           welcome: null
         },
+        integrations: {
+          // Optional CRM integrations configured via `waba integrate ...`
+          autoPush: {
+            // enabled: true,
+            mode: "flow_end"
+          }
+        },
         flows: {
           // Default flow mapping. Create/edit flows under ~/.waba/context/<client>/flows/
           active: "lead-qualification",

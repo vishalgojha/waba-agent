@@ -22,6 +22,7 @@ const { registerReportCommands } = require("./commands/report");
 const { registerFlowCommands } = require("./commands/flow");
 const { registerPaymentsCommands } = require("./commands/payments");
 const { registerDeployCommands } = require("./commands/deploy");
+const { registerLogsCommands } = require("./commands/logs");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -68,6 +69,7 @@ async function main() {
   registerFlowCommands(program);
   registerPaymentsCommands(program);
   registerDeployCommands(program);
+  registerLogsCommands(program);
 
   program
     .command("doctor")

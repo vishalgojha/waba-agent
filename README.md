@@ -109,6 +109,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba flow create|add-step|show|list|test`
 - `waba payments enable|status|send-link|webhook-handler`
 - `waba deploy render docker`
+- `waba logs tail`
 
 Global flags:
 
@@ -236,6 +237,16 @@ waba deploy render docker --client acme --out deploy-acme --port 3000
 cd deploy-acme
 copy .env.example .env
 docker compose up -d --build
+```
+
+## Logs (Support)
+
+Tail memory logs (redacted by default):
+
+```bash
+waba logs tail --client acme --lines 200
+waba logs tail --client acme --follow
+waba logs tail --client acme --type inbound_message --follow
 ```
 
 ## Google Sheets Sync (Fastest CRM Upsell)

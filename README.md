@@ -108,6 +108,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba report weekly --client acme --email client@acme.com`
 - `waba flow create|add-step|show|list|test`
 - `waba payments enable|status|send-link|webhook-handler`
+- `waba deploy render docker`
 
 Global flags:
 
@@ -224,6 +225,17 @@ Start webhook server as part of onboarding (blocks; use Ctrl+C to stop):
 
 ```bash
 waba onboard --client acme --wizard --start-webhook --ngrok --verbose
+```
+
+## Deploy (Docker)
+
+Generate a self-contained Docker deploy folder:
+
+```bash
+waba deploy render docker --client acme --out deploy-acme --port 3000
+cd deploy-acme
+copy .env.example .env
+docker compose up -d --build
 ```
 
 ## Google Sheets Sync (Fastest CRM Upsell)

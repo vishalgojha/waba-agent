@@ -1,4 +1,5 @@
-const chalk = require("chalk");
+const chalkImport = require("chalk");
+const chalk = chalkImport.default || chalkImport;
 
 const { askYesNo } = require("../prompt");
 const { logger } = require("../logger");
@@ -60,4 +61,3 @@ async function executePlan(ctx, { steps, risk }, { yes = false, allowHighRisk = 
 }
 
 module.exports = { executePlan };
-

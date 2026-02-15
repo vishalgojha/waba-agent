@@ -9,3 +9,7 @@ pnpm-debug.log*
 # local secrets/config
 .env
 
+# generated deploy folders (via `waba deploy render`)
+deploy/
+deploy-*/
+deploy*/

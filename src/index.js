@@ -1,6 +1,7 @@
 const { Command } = require("commander");
 const figlet = require("figlet");
-const chalk = require("chalk");
+const chalkImport = require("chalk");
+const chalk = chalkImport.default || chalkImport;
 
 const { registerAuthCommands } = require("./commands/auth");
 const { registerWebhookCommands } = require("./commands/webhook");
@@ -20,6 +21,7 @@ const { registerOnboardCommands } = require("./commands/onboard");
 const { registerReportCommands } = require("./commands/report");
 const { registerFlowCommands } = require("./commands/flow");
 const { registerPaymentsCommands } = require("./commands/payments");
+const { registerDeployCommands } = require("./commands/deploy");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -65,6 +67,7 @@ async function main() {
   registerReportCommands(program);
   registerFlowCommands(program);
   registerPaymentsCommands(program);
+  registerDeployCommands(program);
 
   program
     .command("doctor")

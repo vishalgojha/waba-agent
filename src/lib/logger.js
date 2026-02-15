@@ -1,4 +1,5 @@
-const chalk = require("chalk");
+const chalkImport = require("chalk");
+const chalk = chalkImport.default || chalkImport;
 
 let DEBUG = false;
 
@@ -35,4 +36,3 @@ const logger = {
 };
 
 module.exports = { logger };
-

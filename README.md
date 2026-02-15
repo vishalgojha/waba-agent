@@ -274,6 +274,18 @@ Export and push to Google Sheets (requires `integrate google-sheets`):
 waba export leads --client acme --since 7d --to sheets
 ```
 
+Export a one-page summary (HTML):
+
+```bash
+waba export summary --client acme --since 7d --out summary.html
+```
+
+Export summary as JSON (for automations):
+
+```bash
+waba --json export summary --client acme --since 7d
+```
+
 ## Follow-Ups (Compliant)
 
 Plan follow-ups (no sends):

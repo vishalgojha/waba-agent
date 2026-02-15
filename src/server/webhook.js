@@ -304,7 +304,7 @@ async function startWebhookServer({
             try {
               const tool = ctx.registry.get("lead.classify");
               if (tool) {
-                const out = await tool.execute(ctx, { client: ctx.client, text: textForIntent });
+                const out = await tool.execute(ctx, { client: ctx.client, from, text: textForIntent });
                 const r = out?.result || {};
                 if (r.intent) intent = r.intent;
                 replyOverride = r.nextReplyEnglish || r.nextReplyHindi || null;

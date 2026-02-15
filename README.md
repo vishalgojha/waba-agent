@@ -273,6 +273,11 @@ Send now (within 24h uses text, outside 24h uses template if provided):
 waba leads followup --client acme --mode send --template-name "acme_followup" --template-language en --yes
 ```
 
+Auto-fill template params from fields (default keys: `["name","client"]`):
+
+- `templates.followup.paramsFromFields` (example): `["name","client","location","budget"]`
+- `businessName` (optional): if set in `client.json`, it will be used for the `client` param
+
 Schedule for later (then run `waba schedule run` via cron):
 
 ```bash

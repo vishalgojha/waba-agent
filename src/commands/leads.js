@@ -6,7 +6,8 @@ const { logger } = require("../lib/logger");
 const { askYesNo } = require("../lib/prompt");
 const { getClientConfig } = require("../lib/client-config");
 const { createAgentContext } = require("../lib/agent/agent");
-const { in24hWindow } = require("../lib/session-window");
+const { in24hWindow, normalizeNumber } = require("../lib/session-window");
+const { readState } = require("../lib/flow-state");
 
 function redactPhone(s) {
   const t = String(s || "");
@@ -29,11 +30,6 @@ function parseDurationMs(s) {
   if (u === "h") return Math.floor(n * 3_600_000);
   if (u === "d") return Math.floor(n * 86_400_000);
   return null;
-}
-
-function normalizeNumber(x) {
-  const t = String(x || "").trim().replace(/^\+/, "");
-  return t.replace(/[^0-9]/g, "");
 }
 
 function isInbound(e) {
@@ -126,6 +122,25 @@ function renderTextTemplate(tpl, vars) {
     if (val === null || val === undefined) return "";
     return String(val);
   });
+  return out;
+}
+
+function buildTemplateParamsFromFields(keys, fields, vars, { businessName } = {}) {
+  const k = Array.isArray(keys) && keys.length ? keys : ["name", "client"];
+  const f = fields && typeof fields === "object" ? fields : {};
+  const v = vars && typeof vars === "object" ? vars : {};
+  const out = [];
+  for (const key0 of k) {
+    const key = String(key0 || "").trim();
+    let val = "";
+    if (key === "client") val = businessName || v.client || "";
+    else if (key === "from") val = v.from || "";
+    else if (key === "snippet") val = v.snippet || "";
+    else val = f[key] ?? "";
+
+    if (!val && key === "name") val = "there";
+    out.push(String(val));
+  }
   return out;
 }
 
@@ -234,6 +249,7 @@ function registerLeadsCommands(program) {
 
       const templateName = opts.templateName || followupTmplCfg?.name || null;
       const templateLanguage = opts.templateLanguage || followupTmplCfg?.language || "en";
+      const businessName = clientCfg?.businessName || clientCfg?.brandName || client;
 
       let templateParams = null;
       if (opts.templateParams) {
@@ -244,6 +260,31 @@ function registerLeadsCommands(program) {
         }
       } else if (followupTmplCfg?.params) {
         templateParams = followupTmplCfg.params;
+      }
+      const paramsFromFields = Array.isArray(followupTmplCfg?.paramsFromFields) ? followupTmplCfg.paramsFromFields : ["name", "client"];
+
+      // Enrichment: pull fields from flow state (preferred) and recent lead classifications (best-effort).
+      const state = await readState(client);
+      const flowFieldsByFrom = new Map();
+      for (const [k, v] of Object.entries(state || {})) {
+        const num = normalizeNumber(k);
+        if (!num) continue;
+        const data = v && typeof v === "object" ? v.data : null;
+        if (data && typeof data === "object") flowFieldsByFrom.set(num, data);
+      }
+
+      const events = await readMemory(client, { limit: 50_000 });
+      const classifyByFrom = new Map(); // from -> { ts, fields }
+      for (const e of events) {
+        if (e?.type !== "lead_classification") continue;
+        const from = normalizeNumber(e.from);
+        if (!from) continue;
+        const ts = Date.parse(e.ts || "");
+        if (!Number.isFinite(ts)) continue;
+        const fields = e.result?.fields;
+        if (!fields || typeof fields !== "object") continue;
+        const prev = classifyByFrom.get(from);
+        if (!prev || ts > prev.ts) classifyByFrom.set(from, { ts, fields });
       }
 
       const defaultText =
@@ -261,24 +302,28 @@ function registerLeadsCommands(program) {
         const lastInboundAt = x.lastInboundAt;
         const snippet = lastTextSnippet(x.lastInboundEvent);
         const sessionOpen = in24hWindow(lastInboundAt, nowIso);
+        const flowFields = flowFieldsByFrom.get(normalizeNumber(from)) || {};
+        const aiFields = classifyByFrom.get(normalizeNumber(from))?.fields || {};
+        const fields = { ...aiFields, ...flowFields };
 
         if (sessionOpen) {
           const body = renderTextTemplate(textTpl, { client, from, snippet });
-          actions.push({ kind: "text", to: from, body, lastInboundAt });
+          actions.push({ kind: "text", to: from, body, lastInboundAt, fields });
           willText += 1;
         } else if (templateName) {
-          const params = templateParams ?? ["there", client];
+          const params = templateParams ?? buildTemplateParamsFromFields(paramsFromFields, fields, { client, from, snippet }, { businessName });
           actions.push({
             kind: "template",
             to: from,
             templateName,
             language: templateLanguage,
             params,
-            lastInboundAt
+            lastInboundAt,
+            fields
           });
           willTemplate += 1;
         } else {
-          actions.push({ kind: "skip", to: from, reason: "session_closed_no_template", lastInboundAt });
+          actions.push({ kind: "skip", to: from, reason: "session_closed_no_template", lastInboundAt, fields });
           skipped += 1;
         }
       }

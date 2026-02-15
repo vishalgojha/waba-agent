@@ -22,6 +22,7 @@ function toolLeadClassify() {
     async execute(ctx, args) {
       const client = args?.client || ctx.client || "default";
       const text = args?.text || "";
+      const from = args?.from || null;
       const useAi = !!ctx.config?.openaiApiKey;
 
       let result;
@@ -39,7 +40,7 @@ function toolLeadClassify() {
         });
       }
 
-      await ctx.appendMemory(client, { type: "lead_classification", text, result });
+      await ctx.appendMemory(client, { type: "lead_classification", from, text, result });
       return { ok: true, result };
     }
   };

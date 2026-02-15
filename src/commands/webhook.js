@@ -186,7 +186,7 @@ function registerWebhookCommands(program) {
                 const { toolLeadClassify } = require("../lib/tools/builtins/tool-lead-classify");
                 const tool = toolLeadClassify();
                 const ctx = { config: cfg, client, appendMemory: memAppend };
-                const out = await tool.execute(ctx, { client, text: m.text });
+                const out = await tool.execute(ctx, { client, from: m.from, text: m.text });
                 const r = out?.result || {};
                 const reply = containsHindi(m.text) ? (r.nextReplyHindi || r.nextReplyEnglish) : (r.nextReplyEnglish || r.nextReplyHindi);
                 const body = reply || "Thanks for messaging. Please share your name and requirement, and we'll get back shortly.";

@@ -5,6 +5,7 @@ const { toolSendText } = require("./tool-send-text");
 const { toolSendTemplate } = require("./tool-send-template");
 const { toolWebhookSetupHint } = require("./tool-webhook-setup-hint");
 const { toolScheduleAddText } = require("./tool-schedule-add-text");
+const { toolScheduleAddTemplate } = require("./tool-schedule-add-template");
 const { toolScheduleRunDue } = require("./tool-schedule-run-due");
 const { toolTranscribeVoice } = require("./tool-transcribe-voice");
 const { toolVisionDescribe } = require("./tool-vision-describe");
@@ -22,6 +23,7 @@ function builtinTools() {
     toolWebhookSetupHint(),
     toolWebhookValidate(),
     toolScheduleAddText(),
+    toolScheduleAddTemplate(),
     toolScheduleRunDue()
   ];
 }

@@ -94,7 +94,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba send template|text`
 - `waba agent run`
 - `waba memory list|show|forget`
-- `waba schedule add-text|list|cancel|run`
+- `waba schedule add-text|add-template|list|cancel|run`
 - `waba clients add|list|switch|billing`
 - `waba analytics start`
 - `waba metrics --client acme --days 30`
@@ -489,3 +489,14 @@ Upsells:
 - Outbound marketing requires pre-approved templates.
 - WhatsApp Cloud API is per-message billed (India rates change; rough ballpark: utility ~INR 0.11, marketing ~INR 0.78). This toolkit warns about costs but does not calculate pricing.
 - Follow Meta platform policies and WhatsApp commerce/messaging rules. Add client-specific disclaimers and opt-outs.
+
+## Scheduling (Safe)
+
+Text schedules will only send if the recipient is inside the 24-hour customer-service window; otherwise they fail closed.
+For follow-ups outside 24h, schedule a template.
+
+```bash
+waba schedule add-text 919812345678 --at "2026-02-16T10:00:00+05:30" --body "Hi, checking in..."
+waba schedule add-template 919812345678 --at "2026-02-16T10:00:00+05:30" --template-name "acme_followup" --language en --params "[\"Vishal\",\"ACME\"]"
+waba schedule run
+```

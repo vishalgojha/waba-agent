@@ -2,6 +2,7 @@ const dayjs = require("dayjs");
 
 const { readSchedules, writeSchedules } = require("../../schedule-store");
 const { isOptedOut } = require("../../optout-store");
+const { getLastInboundAt, in24hWindow } = require("../../session-window");
 
 function toolScheduleRunDue() {
   return {
@@ -21,12 +22,41 @@ function toolScheduleRunDue() {
             if (await isOptedOut(item.client || ctx.client || "default", item.to)) {
               throw new Error("Recipient opted out.");
             }
+            const client = item.client || ctx.client || "default";
+            const lastInbound = await getLastInboundAt({ client, from: item.to });
+            if (!in24hWindow(lastInbound, new Date().toISOString())) {
+              throw new Error("Session closed (>24h since last inbound). Use a template schedule.");
+            }
             const res = await ctx.whatsapp.sendText({ to: item.to, body: item.body });
             item.status = "sent";
             item.sentAt = new Date().toISOString();
             item.res = res;
             sent.push({ id: item.id });
             await ctx.appendMemory(item.client || ctx.client || "default", { type: "outbound_sent", kind: "text", to: item.to, body: item.body, res });
+          } else if (item.kind === "template") {
+            if (await isOptedOut(item.client || ctx.client || "default", item.to)) {
+              throw new Error("Recipient opted out.");
+            }
+            const res = await ctx.whatsapp.sendTemplate({
+              to: item.to,
+              templateName: item.templateName,
+              language: item.language || "en",
+              params: item.params
+            });
+            item.status = "sent";
+            item.sentAt = new Date().toISOString();
+            item.res = res;
+            sent.push({ id: item.id });
+            await ctx.appendMemory(item.client || ctx.client || "default", {
+              type: "outbound_sent",
+              kind: "template",
+              to: item.to,
+              templateName: item.templateName,
+              language: item.language || "en",
+              params: item.params,
+              category: item.category || null,
+              res
+            });
           } else {
             throw new Error(`Unsupported scheduled kind: ${item.kind}`);
           }

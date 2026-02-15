@@ -1,0 +1,337 @@
+const express = require("express");
+const bodyParser = require("body-parser");
+const fs = require("fs-extra");
+const path = require("path");
+const dayjs = require("dayjs");
+
+const { logger } = require("../lib/logger");
+const { verifyHubSignature256 } = require("../lib/webhook/signature");
+const { parseWebhookPayload, ruleBasedIntent } = require("../lib/message-parser");
+const { describeImageStub, transcribeVoiceStub } = require("../lib/multimodal-stubs");
+const { createAgentContext } = require("../lib/agent/agent");
+const { executePlan } = require("../lib/agent/executor");
+const { contextDir, wabaHome } = require("../lib/paths");
+const { safeName } = require("../lib/memory");
+
+function redactPhone(s) {
+  const t = String(s || "");
+  if (t.length <= 6) return "***";
+  return `${t.slice(0, 2)}***${t.slice(-4)}`;
+}
+
+function redactPayload(payload) {
+  // Best-effort: keep structure for debugging while masking PII.
+  const p = JSON.parse(JSON.stringify(payload || {}));
+  try {
+    for (const entry of p.entry || []) {
+      for (const change of entry.changes || []) {
+        const v = change.value || {};
+        if (v.contacts) {
+          for (const c of v.contacts) {
+            if (c.wa_id) c.wa_id = redactPhone(c.wa_id);
+            if (c.profile?.name) c.profile.name = "[redacted]";
+          }
+        }
+        if (v.messages) {
+          for (const m of v.messages) {
+            if (m.from) m.from = redactPhone(m.from);
+            // Keep message type + ids, but do not leak contents in verbose logs by default.
+          }
+        }
+        if (v.statuses) {
+          for (const s of v.statuses) {
+            if (s.recipient_id) s.recipient_id = redactPhone(s.recipient_id);
+          }
+        }
+      }
+    }
+  } catch {}
+  return p;
+}
+
+async function readClientConfig(client) {
+  const name = safeName(client || "default");
+  const p = path.join(contextDir(), name, "client.json");
+  if (!(await fs.pathExists(p))) return null;
+  try {
+    const cfg = await fs.readJson(p);
+    return cfg && typeof cfg === "object" ? cfg : null;
+  } catch {
+    return null;
+  }
+}
+
+function in24hWindow(lastInboundIso, nowIso) {
+  if (!lastInboundIso) return false;
+  const last = dayjs(lastInboundIso);
+  const now = dayjs(nowIso);
+  if (!last.isValid() || !now.isValid()) return false;
+  return now.diff(last, "hour", true) <= 24;
+}
+
+function buildReplyPlan({ ctx, clientCfg, from, intent, sessionOpen, textForReply, replyOverride }) {
+  const replies = clientCfg?.intentReplies || {};
+  const templates = clientCfg?.templates || {};
+
+  let body = replyOverride || null;
+  if (!body) {
+    body =
+      intent === "greeting"
+        ? replies.greeting
+        : intent === "price_inquiry"
+          ? replies.price_inquiry
+          : intent === "booking_request"
+            ? replies.booking_request
+            : intent === "order_intent"
+              ? replies.order_intent
+              : replies.fallback;
+  }
+
+  const steps = [
+    {
+      tool: "memory.note",
+      args: { client: ctx.client, text: `Inbound intent=${intent} from=${redactPhone(from)} text=${String(textForReply || "").slice(0, 120)}` },
+      reason: "Record inbound summary."
+    }
+  ];
+
+  // Session awareness:
+  // - If session is open, reply with text (safest for demos).
+  // - If session is closed, prefer welcome template if configured; otherwise do not send.
+  if (intent === "greeting" && templates?.welcome?.name) {
+    steps.push({
+      tool: "template.send",
+      args: { to: from, templateName: templates.welcome.name, language: templates.welcome.language || "en", params: [] },
+      reason: "Greeting: prefer welcome template if configured."
+    });
+  } else if (sessionOpen) {
+    steps.push({
+      tool: "message.send_text",
+      args: { to: from, body: body || "Thanks for messaging. Please share your requirement." },
+      reason: "Reply within the 24h customer-service window."
+    });
+  } else if (templates?.welcome?.name) {
+    steps.push({
+      tool: "template.send",
+      args: { to: from, templateName: templates.welcome.name, language: templates.welcome.language || "en", params: [] },
+      reason: "Session closed. Use pre-approved template."
+    });
+  } else {
+    steps.push({
+      tool: "memory.note",
+      args: { client: ctx.client, text: "Session closed and no welcome template configured; skipping outbound reply." },
+      reason: "Avoid violating WhatsApp outbound rules."
+    });
+  }
+
+  return steps;
+}
+
+async function startWebhookServer({
+  host = "127.0.0.1",
+  port = 3000,
+  pathName = "/webhook",
+  verifyToken,
+  appSecret,
+  client = "default",
+  verbose = false,
+  allowOutbound = false,
+  memoryEnabled = true,
+  enableNgrok = false,
+  llm = false
+} = {}) {
+  if (!verifyToken) logger.warn("Missing verify token (WABA_VERIFY_TOKEN or saved config). GET verification may fail.");
+
+  const ctx = await createAgentContext({ client, memoryEnabled });
+
+  // In-memory session store (per process) for quick 24h checks.
+  const lastInboundByFrom = new Map(); // from -> ISO
+
+  const app = express();
+
+  app.get("/health", (_req, res) => res.status(200).json({ ok: true }));
+
+  app.get(pathName, (req, res) => {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+
+    if (mode === "subscribe" && token && challenge && verifyToken && token === verifyToken) {
+      res.status(200).type("text/plain").send(String(challenge));
+      return;
+    }
+    res.status(403).type("text/plain").send("Forbidden");
+  });
+
+  app.use(
+    pathName,
+    bodyParser.json({
+      limit: "2mb",
+      verify: (req, _res, buf) => {
+        req.rawBody = buf;
+      }
+    })
+  );
+
+  // Graceful handling of invalid JSON from clients/tests.
+  // Note: Meta will send valid JSON; this is for local testing safety.
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, _req, res, _next) => {
+    logger.warn(`webhook parse error: ${err?.message || err}`);
+    res.status(400).type("text/plain").send("Invalid JSON");
+  });
+
+  app.post(pathName, async (req, res) => {
+    try {
+      const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body || {}), "utf8");
+      const sig = req.headers["x-hub-signature-256"];
+      const v = verifyHubSignature256({ appSecret, rawBody, signatureHeader: sig });
+      if (!v.ok) {
+        res.status(401).type("text/plain").send("Bad signature");
+        logger.warn(`webhook signature invalid: ${v.reason}`);
+        return;
+      }
+
+      const payload = req.body;
+      // ACK quickly after minimal validation.
+      res.status(200).type("text/plain").send("OK");
+      if (verbose) {
+        logger.info({ webhook: redactPayload(payload) });
+      }
+
+      setImmediate(async () => {
+        const events = parseWebhookPayload(payload);
+        for (const e of events) {
+          if (e.kind === "status") {
+            logger.info(`status ${e.status} id=${e.id} to=${redactPhone(e.recipient_id || "")}`);
+            await ctx.appendMemory(ctx.client, { type: "status_update", status: e.status, id: e.id, recipient: e.recipient_id, ts: e.timestamp });
+            continue;
+          }
+
+          if (e.kind !== "message") continue;
+          const from = e.from;
+          const nowIso = new Date().toISOString();
+          lastInboundByFrom.set(from, e.timestamp || nowIso);
+
+          const summary = {
+            id: e.id,
+            from: redactPhone(from),
+            type: e.type,
+            ts: e.timestamp
+          };
+          logger.info(`inbound ${JSON.stringify(summary)}`);
+
+          // Normalize a "text for classification" across types.
+          let textForIntent = e.text || "";
+          if (e.type === "interactive" && e.interactive) {
+            textForIntent = e.interactive.title || e.interactive.id || "";
+          }
+
+          // Multimodal enrichment (stubs).
+          let transcript = null;
+          let imageDesc = null;
+          if (e.type === "audio" && e.audio?.id) {
+            try {
+              const out = await transcribeVoiceStub(ctx, { mediaId: e.audio.id, mimeType: e.audio.mime_type });
+              transcript = out.text;
+              await ctx.appendMemory(ctx.client, { type: "inbound_audio", from, mediaId: e.audio.id, ts: e.timestamp, transcript, filePath: out.filePath });
+              textForIntent = `${textForIntent}\n${transcript}`.trim();
+            } catch (err) {
+              logger.warn(`audio processing failed: ${err?.message || err}`);
+              await ctx.appendMemory(ctx.client, { type: "inbound_audio", from, mediaId: e.audio.id, ts: e.timestamp, error: String(err?.message || err) });
+            }
+          }
+          if (e.type === "image" && e.image?.id) {
+            try {
+              const out = await describeImageStub(ctx, { mediaId: e.image.id, mimeType: e.image.mime_type });
+              imageDesc = out.desc;
+              await ctx.appendMemory(ctx.client, { type: "inbound_image", from, mediaId: e.image.id, ts: e.timestamp, desc: imageDesc, filePath: out.filePath });
+              textForIntent = `${textForIntent}\n${imageDesc}`.trim();
+            } catch (err) {
+              logger.warn(`image processing failed: ${err?.message || err}`);
+              await ctx.appendMemory(ctx.client, { type: "inbound_image", from, mediaId: e.image.id, ts: e.timestamp, error: String(err?.message || err) });
+            }
+          }
+
+          await ctx.appendMemory(ctx.client, { type: "inbound_message", from, ts: e.timestamp, msgType: e.type, text: e.text, interactive: e.interactive });
+
+          const clientCfg = await readClientConfig(ctx.client);
+          let intent = ruleBasedIntent(textForIntent || "").intent;
+          let replyOverride = null;
+
+          if (llm && ctx.config?.openaiApiKey && textForIntent) {
+            try {
+              const tool = ctx.registry.get("lead.classify");
+              if (tool) {
+                const out = await tool.execute(ctx, { client: ctx.client, text: textForIntent });
+                const r = out?.result || {};
+                if (r.intent) intent = r.intent;
+                replyOverride = r.nextReplyEnglish || r.nextReplyHindi || null;
+              }
+            } catch (err) {
+              logger.warn(`LLM classify failed, falling back to rules: ${err?.message || err}`);
+            }
+          }
+
+          const last = lastInboundByFrom.get(from);
+          const sessionOpen = in24hWindow(e.timestamp || last, nowIso);
+
+          // Build a small tool-only plan.
+          const steps = buildReplyPlan({
+            ctx,
+            clientCfg,
+            from,
+            intent,
+            sessionOpen,
+            textForReply: textForIntent,
+            replyOverride
+          }).filter(Boolean);
+
+          if (!allowOutbound) {
+            // Remove outbound steps; still show plan via executor.
+            const filtered = steps.filter((s) => s.tool !== "message.send_text" && s.tool !== "template.send");
+            logger.warn("Outbound is disabled. Re-run with --allow-outbound to actually reply.");
+            await executePlan(ctx, { steps: filtered, risk: "low" }, { yes: true, allowHighRisk: false, json: false });
+            continue;
+          }
+
+          const hasOutbound = steps.some((s) => s.tool === "message.send_text" || s.tool === "template.send");
+          const overallRisk = hasOutbound ? "high" : "low";
+
+          // Execute with confirmations. Even with --yes, high-risk steps should prompt unless allowHighRisk is set.
+          await executePlan(ctx, { steps, risk: overallRisk }, { yes: true, allowHighRisk: false, json: false });
+        }
+      });
+    } catch (err) {
+      try {
+        if (!res.headersSent) res.status(500).type("text/plain").send("Server error");
+      } catch {}
+      logger.error(err?.stack || String(err));
+    }
+  });
+
+  const server = await new Promise((resolve) => {
+    const s = app.listen(port, host, () => resolve(s));
+  });
+
+  logger.ok(`Webhook server listening on http://${host}:${port}${pathName}`);
+  logger.info(`WABA_HOME: ${wabaHome()}`);
+
+  let publicUrl = null;
+  if (enableNgrok) {
+    try {
+      // Requires `NGROK_AUTHTOKEN` (or ngrok account setup depending on version).
+      // eslint-disable-next-line import/no-extraneous-dependencies
+      const ngrok = require("ngrok");
+      publicUrl = await ngrok.connect({ addr: port });
+      logger.ok(`ngrok: ${publicUrl}`);
+      logger.info(`Set Meta webhook callback URL to: ${publicUrl}${pathName}`);
+    } catch (err) {
+      logger.warn(`Failed to start ngrok. Install/configure ngrok and set NGROK_AUTHTOKEN. ${err?.message || err}`);
+    }
+  }
+
+  return { server, publicUrl };
+}
+
+module.exports = { startWebhookServer };

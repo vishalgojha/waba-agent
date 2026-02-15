@@ -12,6 +12,7 @@ const { WhatsAppCloudApi } = require("../lib/whatsapp");
 const { visionDescribe, transcribeAudioFile } = require("../lib/ai/openai");
 const { appendMemory } = require("../lib/memory");
 const { startWebhookServer } = require("../server/webhook");
+const { requireClientCreds } = require("../lib/creds");
 
 function base64url(buf) {
   return Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -64,7 +65,7 @@ function registerWebhookCommands(program) {
     .description("start a local webhook server (GET verify + POST events)")
     .option("--port <n>", "port", (v) => Number(v), 3000)
     .option("--path <path>", "path (default: /webhook)", "/webhook")
-    .option("--client <name>", "memory client name", "default")
+    .option("--client <name>", "client name (config + memory). Default: active client")
     .option("--auto-classify", "classify inbound text and show suggested reply (no outbound sends)", false)
     .option("--auto-reply", "send auto-replies to inbound text (requires --allow-outbound)", false)
     .option("--allow-outbound", "explicitly allow outbound sends from webhook server (costs money)", false)
@@ -74,14 +75,16 @@ function registerWebhookCommands(program) {
       if (json) throw new Error("--json not supported for long-running server.");
 
       const cfg = await getConfig();
+      const client = opts.client || cfg.activeClient || "default";
+      const creds = requireClientCreds(cfg, client);
       if (!cfg.webhookVerifyToken) {
         logger.warn("Missing webhook verify token. Run `waba webhook setup --url https://...` first.");
       }
 
       const api = new WhatsAppCloudApi({
-        token: cfg.token,
-        phoneNumberId: cfg.phoneNumberId,
-        wabaId: cfg.wabaId,
+        token: creds.token,
+        phoneNumberId: creds.phoneNumberId,
+        wabaId: creds.wabaId,
         graphVersion: cfg.graphVersion || "v20.0",
         baseUrl: cfg.baseUrl
       });
@@ -111,7 +114,7 @@ function registerWebhookCommands(program) {
             logger.info(`inbound from=${m.from} type=${m.type} id=${m.id}`);
             if (m.type === "text") {
               logger.info(`text: ${m.text}`);
-              await memAppend(opts.client, { type: "inbound_text", from: m.from, text: m.text, messageId: m.id });
+              await memAppend(client, { type: "inbound_text", from: m.from, text: m.text, messageId: m.id });
             }
 
             if (m.type === "image" && m.image?.id) {
@@ -119,11 +122,11 @@ function registerWebhookCommands(program) {
               try {
                 const meta = await api.getMedia({ mediaId: m.image.id });
                 const buf = await api.downloadMedia({ url: meta.url });
-                await memAppend(opts.client, { type: "inbound_image", from: m.from, mediaId: m.image.id, meta });
+                await memAppend(client, { type: "inbound_image", from: m.from, mediaId: m.image.id, meta });
                 if (cfg.openaiApiKey) {
                   const desc = await visionDescribe(cfg, { imageBuffer: buf, mimeType: meta.mime_type || "image/jpeg" });
                   logger.info(`vision: ${desc}`);
-                  await memAppend(opts.client, { type: "vision_description", from: m.from, mediaId: m.image.id, desc });
+                  await memAppend(client, { type: "vision_description", from: m.from, mediaId: m.image.id, desc });
                 } else {
                   logger.warn("OPENAI_API_KEY not set; skipping vision description.");
                 }
@@ -139,11 +142,11 @@ function registerWebhookCommands(program) {
                 const buf = await api.downloadMedia({ url: meta.url });
                 const tmp = path.join(os.tmpdir(), `waba_audio_${Date.now()}.bin`);
                 await fs.writeFile(tmp, buf);
-                await memAppend(opts.client, { type: "inbound_audio", from: m.from, mediaId: m.audio.id, meta, tmp });
+                await memAppend(client, { type: "inbound_audio", from: m.from, mediaId: m.audio.id, meta, tmp });
                 if (cfg.openaiApiKey) {
                   const text = await transcribeAudioFile(cfg, { filePath: tmp, mimeType: meta.mime_type || "audio/ogg" });
                   logger.info(`transcript: ${text}`);
-                  await memAppend(opts.client, { type: "audio_transcript", from: m.from, mediaId: m.audio.id, text });
+                  await memAppend(client, { type: "audio_transcript", from: m.from, mediaId: m.audio.id, text });
                 } else {
                   logger.warn("OPENAI_API_KEY not set; skipping transcription.");
                 }
@@ -158,11 +161,11 @@ function registerWebhookCommands(program) {
                 const { createAgentContext } = require("../lib/agent/agent");
                 const { planSteps } = require("../lib/agent/planner");
                 const { executePlan } = require("../lib/agent/executor");
-                const ctx = await createAgentContext({ client: opts.client });
+                const ctx = await createAgentContext({ client });
                 // Build a 1-step plan to classify.
                 const plan = await planSteps(ctx, {
                   prompt: "classify inbound lead",
-                  client: opts.client,
+                  client,
                   exampleInboundText: m.text
                 });
                 const classifyStep = plan.steps.find((s) => s.tool === "lead.classify");
@@ -182,14 +185,14 @@ function registerWebhookCommands(program) {
               try {
                 const { toolLeadClassify } = require("../lib/tools/builtins/tool-lead-classify");
                 const tool = toolLeadClassify();
-                const ctx = { config: cfg, client: opts.client, appendMemory: memAppend };
-                const out = await tool.execute(ctx, { client: opts.client, text: m.text });
+                const ctx = { config: cfg, client, appendMemory: memAppend };
+                const out = await tool.execute(ctx, { client, text: m.text });
                 const r = out?.result || {};
                 const reply = containsHindi(m.text) ? (r.nextReplyHindi || r.nextReplyEnglish) : (r.nextReplyEnglish || r.nextReplyHindi);
                 const body = reply || "Thanks for messaging. Please share your name and requirement, and we'll get back shortly.";
                 logger.warn("Auto-reply sending outbound text (may incur per-message fees).");
                 const sent = await api.sendText({ to: m.from, body });
-                await memAppend(opts.client, { type: "auto_reply_sent", to: m.from, body, sent });
+                await memAppend(client, { type: "auto_reply_sent", to: m.from, body, sent });
                 logger.ok(`auto-replied to ${m.from}`);
               } catch (err) {
                 logger.error(`auto-reply failed: ${err?.message || err}`);

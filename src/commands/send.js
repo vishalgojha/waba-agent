@@ -2,6 +2,7 @@ const { getConfig } = require("../lib/config");
 const { WhatsAppCloudApi } = require("../lib/whatsapp");
 const { logger } = require("../lib/logger");
 const { isOptedOut } = require("../lib/optout-store");
+const { requireClientCreds } = require("../lib/creds");
 
 function tryParseJson(s) {
   if (!s) return undefined;
@@ -22,17 +23,19 @@ function registerSendCommands(program) {
     .requiredOption("--language <code>", "language code (example: en)")
     .option("--category <utility|marketing>", "category tag for local analytics (does not affect Meta)", "utility")
     .option("--params <json>", "template params JSON: array for body params OR object for components")
+    .option("--client <name>", "client name (default: active client)")
     .action(async (to, opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json } = root.opts();
       const cfg = await getConfig();
-      if (await isOptedOut(cfg.activeClient || "default", to)) {
+      const creds = requireClientCreds(cfg, opts.client);
+      if (await isOptedOut(creds.client, to)) {
         throw new Error("Recipient is opted out. Use `waba optout check <number>` to verify.");
       }
       const api = new WhatsAppCloudApi({
-        token: cfg.token,
-        phoneNumberId: cfg.phoneNumberId,
-        wabaId: cfg.wabaId,
+        token: creds.token,
+        phoneNumberId: creds.phoneNumberId,
+        wabaId: creds.wabaId,
         graphVersion: cfg.graphVersion || "v20.0",
         baseUrl: cfg.baseUrl
       });
@@ -46,7 +49,7 @@ function registerSendCommands(program) {
       // best-effort local analytics tagging
       try {
         const { appendMemory } = require("../lib/memory");
-        await appendMemory(cfg.activeClient || "default", { type: "outbound_sent", kind: "template", to, category: opts.category });
+        await appendMemory(creds.client, { type: "outbound_sent", kind: "template", to, category: opts.category });
       } catch {}
       if (json) {
         // eslint-disable-next-line no-console
@@ -63,17 +66,19 @@ function registerSendCommands(program) {
     .requiredOption("--body <text>", "text body")
     .option("--category <utility|marketing>", "category tag for local analytics (does not affect Meta)", "utility")
     .option("--preview-url", "enable URL previews", false)
+    .option("--client <name>", "client name (default: active client)")
     .action(async (to, opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json } = root.opts();
       const cfg = await getConfig();
-      if (await isOptedOut(cfg.activeClient || "default", to)) {
+      const creds = requireClientCreds(cfg, opts.client);
+      if (await isOptedOut(creds.client, to)) {
         throw new Error("Recipient is opted out. Use `waba optout check <number>` to verify.");
       }
       const api = new WhatsAppCloudApi({
-        token: cfg.token,
-        phoneNumberId: cfg.phoneNumberId,
-        wabaId: cfg.wabaId,
+        token: creds.token,
+        phoneNumberId: creds.phoneNumberId,
+        wabaId: creds.wabaId,
         graphVersion: cfg.graphVersion || "v20.0",
         baseUrl: cfg.baseUrl
       });
@@ -81,7 +86,7 @@ function registerSendCommands(program) {
       const data = await api.sendText({ to, body: opts.body, previewUrl: !!opts.previewUrl });
       try {
         const { appendMemory } = require("../lib/memory");
-        await appendMemory(cfg.activeClient || "default", { type: "outbound_sent", kind: "text", to, category: opts.category });
+        await appendMemory(creds.client, { type: "outbound_sent", kind: "text", to, category: opts.category });
       } catch {}
       if (json) {
         // eslint-disable-next-line no-console

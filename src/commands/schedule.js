@@ -7,6 +7,7 @@ const { askYesNo } = require("../lib/prompt");
 const { logger } = require("../lib/logger");
 const { isOptedOut } = require("../lib/optout-store");
 const { getLastInboundAt, in24hWindow } = require("../lib/session-window");
+const { requireClientCreds } = require("../lib/creds");
 
 function registerScheduleCommands(program) {
   const s = program.command("schedule").description("outbound scheduling (stores locally; run `schedule run` to send due)");
@@ -16,10 +17,12 @@ function registerScheduleCommands(program) {
     .argument("<to_number>", "E.164 without + (example: 9198xxxxxx)")
     .requiredOption("--at <iso>", "ISO datetime (recommended with offset, example: 2026-02-16T10:00:00+05:30)")
     .requiredOption("--body <text>", "message body")
-    .option("--client <name>", "client name", "default")
+    .option("--client <name>", "client name (default: active client)")
     .action(async (to, opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json } = root.opts();
+      const cfg = await getConfig();
+      const client = opts.client || cfg.activeClient || "default";
       const dt = dayjs(opts.at);
       if (!dt.isValid()) throw new Error("Invalid --at. Use ISO 8601 (example: 2026-02-16T10:00:00+05:30).");
       const list = await readSchedules();
@@ -31,7 +34,7 @@ function registerScheduleCommands(program) {
         runAt: dt.toISOString(),
         status: "pending",
         createdAt: new Date().toISOString(),
-        client: opts.client
+        client
       };
       list.push(item);
       const p = await writeSchedules(list);
@@ -54,10 +57,12 @@ function registerScheduleCommands(program) {
     .option("--language <code>", "language code (example: en)", "en")
     .option("--params <json>", "template params JSON (array or object)", "[]")
     .option("--category <utility|marketing>", "cost category label (informational)", "utility")
-    .option("--client <name>", "client name", "default")
+    .option("--client <name>", "client name (default: active client)")
     .action(async (to, opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json } = root.opts();
+      const cfg = await getConfig();
+      const client = opts.client || cfg.activeClient || "default";
       const dt = dayjs(opts.at);
       if (!dt.isValid()) throw new Error("Invalid --at. Use ISO 8601 (example: 2026-02-16T10:00:00+05:30).");
 
@@ -80,7 +85,7 @@ function registerScheduleCommands(program) {
         runAt: dt.toISOString(),
         status: "pending",
         createdAt: new Date().toISOString(),
-        client: opts.client
+        client
       };
       list.push(item);
       const p = await writeSchedules(list);
@@ -133,13 +138,21 @@ function registerScheduleCommands(program) {
       const { json } = root.opts();
 
       const cfg = await getConfig();
-      const api = new WhatsAppCloudApi({
-        token: cfg.token,
-        phoneNumberId: cfg.phoneNumberId,
-        wabaId: cfg.wabaId,
-        graphVersion: cfg.graphVersion || "v20.0",
-        baseUrl: cfg.baseUrl
-      });
+      const apiByClient = new Map();
+      const getApi = (clientName) => {
+        const name = clientName || cfg.activeClient || "default";
+        if (apiByClient.has(name)) return apiByClient.get(name);
+        const creds = requireClientCreds(cfg, name);
+        const api = new WhatsAppCloudApi({
+          token: creds.token,
+          phoneNumberId: creds.phoneNumberId,
+          wabaId: creds.wabaId,
+          graphVersion: cfg.graphVersion || "v20.0",
+          baseUrl: cfg.baseUrl
+        });
+        apiByClient.set(name, api);
+        return api;
+      };
 
       const list = await readSchedules();
       const now = dayjs();
@@ -164,6 +177,7 @@ function registerScheduleCommands(program) {
       const failed = [];
       for (const item of due) {
         try {
+          const api = getApi(item.client);
           if (item.kind === "text") {
             if (await isOptedOut(item.client || cfg.activeClient || "default", item.to)) {
               throw new Error("Recipient opted out.");

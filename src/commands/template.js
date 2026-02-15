@@ -3,6 +3,7 @@ const { WhatsAppCloudApi } = require("../lib/whatsapp");
 const { logger } = require("../lib/logger");
 const { saveDraft, loadDraft, listDrafts } = require("../lib/template-drafts");
 const { readMemory } = require("../lib/memory");
+const { requireClientCreds } = require("../lib/creds");
 
 function parseDurationMs(s) {
   const t = String(s || "").trim().toLowerCase();
@@ -40,6 +41,7 @@ function sleep(ms) {
 async function createOrSubmitTemplate(opts, { json }) {
   const cfg = await getConfig();
   const client = opts.client || cfg.activeClient || "default";
+  const creds = requireClientCreds(cfg, client);
 
   let examples = null;
   if (opts.examples) {
@@ -80,9 +82,9 @@ async function createOrSubmitTemplate(opts, { json }) {
   }
 
   const api = new WhatsAppCloudApi({
-    token: cfg.token,
-    phoneNumberId: cfg.phoneNumberId,
-    wabaId: cfg.wabaId,
+    token: creds.token,
+    phoneNumberId: creds.phoneNumberId,
+    wabaId: creds.wabaId,
     graphVersion: cfg.graphVersion || "v20.0",
     baseUrl: cfg.baseUrl
   });
@@ -103,14 +105,16 @@ function registerTemplateCommands(program) {
   t.command("list")
     .description("list message templates (requires business/WABA ID)")
     .option("--limit <n>", "limit", (v) => Number(v), 50)
+    .option("--client <name>", "client name (default: active client)")
     .action(async (opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json } = root.opts();
       const cfg = await getConfig();
+      const creds = requireClientCreds(cfg, opts.client);
       const api = new WhatsAppCloudApi({
-        token: cfg.token,
-        phoneNumberId: cfg.phoneNumberId,
-        wabaId: cfg.wabaId,
+        token: creds.token,
+        phoneNumberId: creds.phoneNumberId,
+        wabaId: creds.wabaId,
         graphVersion: cfg.graphVersion || "v20.0",
         baseUrl: cfg.baseUrl
       });
@@ -131,14 +135,16 @@ function registerTemplateCommands(program) {
     .description("check template status by name")
     .requiredOption("--name <name>", "template name")
     .option("--limit <n>", "search limit", (v) => Number(v), 200)
+    .option("--client <name>", "client name (default: active client)")
     .action(async (opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json } = root.opts();
       const cfg = await getConfig();
+      const creds = requireClientCreds(cfg, opts.client);
       const api = new WhatsAppCloudApi({
-        token: cfg.token,
-        phoneNumberId: cfg.phoneNumberId,
-        wabaId: cfg.wabaId,
+        token: creds.token,
+        phoneNumberId: creds.phoneNumberId,
+        wabaId: creds.wabaId,
         graphVersion: cfg.graphVersion || "v20.0",
         baseUrl: cfg.baseUrl
       });
@@ -168,14 +174,16 @@ function registerTemplateCommands(program) {
     .option("--timeout <dur>", "timeout (example: 20m, 600s). default: 20m", "20m")
     .option("--interval <dur>", "poll interval (default: 20s)", "20s")
     .option("--limit <n>", "search limit", (v) => Number(v), 200)
+    .option("--client <name>", "client name (default: active client)")
     .action(async (opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json } = root.opts();
       const cfg = await getConfig();
+      const creds = requireClientCreds(cfg, opts.client);
       const api = new WhatsAppCloudApi({
-        token: cfg.token,
-        phoneNumberId: cfg.phoneNumberId,
-        wabaId: cfg.wabaId,
+        token: creds.token,
+        phoneNumberId: creds.phoneNumberId,
+        wabaId: creds.wabaId,
         graphVersion: cfg.graphVersion || "v20.0",
         baseUrl: cfg.baseUrl
       });
@@ -225,11 +233,12 @@ function registerTemplateCommands(program) {
       const { json } = root.opts();
       const cfg = await getConfig();
       const client = opts.client || cfg.activeClient || "default";
+      const creds = requireClientCreds(cfg, client);
 
       const api = new WhatsAppCloudApi({
-        token: cfg.token,
-        phoneNumberId: cfg.phoneNumberId,
-        wabaId: cfg.wabaId,
+        token: creds.token,
+        phoneNumberId: creds.phoneNumberId,
+        wabaId: creds.wabaId,
         graphVersion: cfg.graphVersion || "v20.0",
         baseUrl: cfg.baseUrl
       });
@@ -383,11 +392,12 @@ function registerTemplateCommands(program) {
       const { json } = root.opts();
       const cfg = await getConfig();
       const client = opts.client || cfg.activeClient || "default";
+      const creds = requireClientCreds(cfg, client);
 
       const api = new WhatsAppCloudApi({
-        token: cfg.token,
-        phoneNumberId: cfg.phoneNumberId,
-        wabaId: cfg.wabaId,
+        token: creds.token,
+        phoneNumberId: creds.phoneNumberId,
+        wabaId: creds.wabaId,
         graphVersion: cfg.graphVersion || "v20.0",
         baseUrl: cfg.baseUrl
       });

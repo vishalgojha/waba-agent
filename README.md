@@ -112,6 +112,8 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba logs tail`
 - `waba leads missed`
 - `waba export leads`
+- `waba export summary`
+- `waba autopilot daily`
 
 Global flags:
 
@@ -129,6 +131,7 @@ waba-agent/
     agent.js
     auth.js
     analytics.js
+    autopilot.js
     campaign.js
     clients.js
     cost.js
@@ -157,6 +160,8 @@ waba-agent/
     http.js
     logger.js
     memory.js
+    duration.js
+    followup.js
     message-parser.js
     multimodal-stubs.js
     optout-store.js
@@ -164,6 +169,7 @@ waba-agent/
     prompt.js
     redact.js
     report.js
+    summary.js
     schedule-store.js
     template-drafts.js
     tools.js
@@ -310,6 +316,28 @@ Schedule for later (then run `waba schedule run` via cron):
 ```bash
 waba leads followup --client acme --mode schedule --template-name "acme_followup" --schedule-delay 10m --yes
 ```
+
+## Autopilot (Daily Ops)
+
+One-shot ops runner for small teams: generate a summary HTML + compute missed leads + optionally schedule follow-ups.
+
+Plan-only (safe):
+
+```bash
+waba autopilot daily --client acme --since 24h --min-age 10m
+```
+
+Schedule follow-ups (high risk: outbound billed; will prompt):
+
+```bash
+waba autopilot daily --client acme --since 24h --min-age 10m --schedule-delay 0m --yes
+```
+
+Notes:
+
+- Within 24h window: schedules TEXT follow-ups.
+- Outside 24h window: schedules TEMPLATE follow-ups only if `templates.followup.name` is configured (or you pass `--template-name`).
+- Run due items with `waba schedule run` (cron it).
 
 ## Google Sheets Sync (Fastest CRM Upsell)
 

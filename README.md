@@ -259,6 +259,26 @@ Find leads who messaged but did not get a reply yet (from local memory logs):
 waba leads missed --client acme --since 24h --min-age 5m
 ```
 
+## Follow-Ups (Compliant)
+
+Plan follow-ups (no sends):
+
+```bash
+waba leads followup --client acme --mode plan --since 7d --min-age 10m
+```
+
+Send now (within 24h uses text, outside 24h uses template if provided):
+
+```bash
+waba leads followup --client acme --mode send --template-name "acme_followup" --template-language en --yes
+```
+
+Schedule for later (then run `waba schedule run` via cron):
+
+```bash
+waba leads followup --client acme --mode schedule --template-name "acme_followup" --schedule-delay 10m --yes
+```
+
 ## Google Sheets Sync (Fastest CRM Upsell)
 
 1) Print Apps Script template:

@@ -10,20 +10,31 @@ const { executePlan } = require("./executor");
 async function createAgentContext({ client, memoryEnabled = true } = {}) {
   const config = await getConfig();
   const registry = createRegistry();
+
+  const clientName = client || config.activeClient || "default";
+  const creds = (config.clients && typeof config.clients === "object" ? config.clients[clientName] : null) ||
+    (config.clients && typeof config.clients === "object" ? config.clients[config.activeClient || "default"] : null) ||
+    {};
+
+  // Use per-client creds when present. Env vars still override via getConfig() for single-tenant deployments.
+  const token = creds.token || config.token;
+  const phoneNumberId = creds.phoneNumberId || config.phoneNumberId;
+  const wabaId = creds.wabaId || config.wabaId;
+
   const whatsapp = new WhatsAppCloudApi({
-    token: config.token,
-    phoneNumberId: config.phoneNumberId,
-    wabaId: config.wabaId,
+    token,
+    phoneNumberId,
+    wabaId,
     graphVersion: config.graphVersion || "v20.0",
     baseUrl: config.baseUrl,
     timeoutMs: 30_000
   });
 
   const ctx = {
-    config,
+    config: { ...config, token, phoneNumberId, wabaId },
     registry,
     whatsapp,
-    client: client || "default",
+    client: clientName,
     memoryEnabled: !!memoryEnabled,
     optout: {
       async isOptedOut(number) {

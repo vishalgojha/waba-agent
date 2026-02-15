@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs-extra");
 
 const { logger } = require("./logger");
+const { transcribeAudioFile, visionDescribe } = require("./ai/openai");
 
 async function downloadMediaToTemp(whatsapp, { mediaId }) {
   const meta = await whatsapp.getMedia({ mediaId });
@@ -13,34 +14,43 @@ async function downloadMediaToTemp(whatsapp, { mediaId }) {
   return { meta, filePath };
 }
 
-async function transcribeVoiceStub(ctx, { mediaId, mimeType }) {
+async function transcribeVoiceStub(ctx, { mediaId, mimeType, ai = false }) {
   const { meta, filePath } = await downloadMediaToTemp(ctx.whatsapp, { mediaId });
   const mt = mimeType || meta.mime_type || "audio/ogg";
 
-  // Stub: wire this to your transcription provider.
-  // Example (OpenAI-compatible):
-  // const { transcribeAudioFile } = require("./ai/openai");
-  // const text = await transcribeAudioFile(ctx.config, { filePath, mimeType: mt });
-  // return { filePath, text };
+  if (ai && ctx.config?.openaiApiKey) {
+    try {
+      const text = await transcribeAudioFile(ctx.config, { filePath, mimeType: mt });
+      return { filePath, mimeType: mt, text };
+    } catch (err) {
+      logger.warn(`Transcription failed; using stub. ${err?.message || err}`);
+      return { filePath, mimeType: mt, text: "[voice transcription failed]" };
+    }
+  }
 
-  if (!ctx.config?.openaiApiKey) {
+  if (ai && !ctx.config?.openaiApiKey) {
     logger.warn("Voice note received. To enable transcription, set OPENAI_API_KEY and WABA_OPENAI_TRANSCRIBE_MODEL.");
   }
 
   return { filePath, mimeType: mt, text: "[voice transcription stub]" };
 }
 
-async function describeImageStub(ctx, { mediaId, mimeType }) {
+async function describeImageStub(ctx, { mediaId, mimeType, ai = false }) {
   const { meta, filePath } = await downloadMediaToTemp(ctx.whatsapp, { mediaId });
   const mt = mimeType || meta.mime_type || "image/jpeg";
 
-  // Stub: wire this to your vision provider.
-  // Example (OpenAI-compatible):
-  // const { visionDescribe } = require("./ai/openai");
-  // const desc = await visionDescribe(ctx.config, { imageBuffer: await fs.readFile(filePath), mimeType: mt });
-  // return { filePath, desc };
+  if (ai && ctx.config?.openaiApiKey) {
+    try {
+      const buf = await fs.readFile(filePath);
+      const desc = await visionDescribe(ctx.config, { imageBuffer: buf, mimeType: mt });
+      return { filePath, mimeType: mt, desc };
+    } catch (err) {
+      logger.warn(`Vision failed; using stub. ${err?.message || err}`);
+      return { filePath, mimeType: mt, desc: "[image description failed]" };
+    }
+  }
 
-  if (!ctx.config?.openaiApiKey) {
+  if (ai && !ctx.config?.openaiApiKey) {
     logger.warn("Image received. To enable description, set OPENAI_API_KEY and WABA_OPENAI_VISION_MODEL.");
   }
 
@@ -51,4 +61,3 @@ module.exports = {
   transcribeVoiceStub,
   describeImageStub
 };
-

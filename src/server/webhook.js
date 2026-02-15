@@ -16,6 +16,7 @@ const { addOptout, isOptedOut } = require("../lib/optout-store");
 const { handleInboundWithFlow } = require("../lib/flow-engine");
 const { getClientConfig } = require("../lib/client-config");
 const { hasAnyCrm, pushLeadToCrm } = require("../lib/crm");
+const { getLastInboundAt, in24hWindow } = require("../lib/session-window");
 
 function redactPhone(s) {
   const t = String(s || "");
@@ -58,13 +59,7 @@ async function readClientConfig(client) {
   return getClientConfig(client);
 }
 
-function in24hWindow(lastInboundIso, nowIso) {
-  if (!lastInboundIso) return false;
-  const last = dayjs(lastInboundIso);
-  const now = dayjs(nowIso);
-  if (!last.isValid() || !now.isValid()) return false;
-  return now.diff(last, "hour", true) <= 24;
-}
+// Note: session window logic lives in ../lib/session-window.js
 
 function buildReplyPlan({ ctx, clientCfg, from, intent, sessionOpen, textForReply, replyOverride }) {
   const replies = clientCfg?.intentReplies || {};
@@ -168,6 +163,7 @@ async function startWebhookServer({
   client = "default",
   verbose = false,
   allowOutbound = false,
+  allowHighRisk = false,
   memoryEnabled = true,
   enableNgrok = false,
   llm = false
@@ -176,7 +172,7 @@ async function startWebhookServer({
 
   const ctx = await createAgentContext({ client, memoryEnabled });
 
-  // In-memory session store (per process) for quick 24h checks.
+  // In-memory cache (per process) for quick 24h checks; fallback to memory.jsonl when missing.
   const lastInboundByFrom = new Map(); // from -> ISO
 
   const app = express();
@@ -264,7 +260,7 @@ async function startWebhookServer({
           let imageDesc = null;
           if (e.type === "audio" && e.audio?.id) {
             try {
-              const out = await transcribeVoiceStub(ctx, { mediaId: e.audio.id, mimeType: e.audio.mime_type });
+              const out = await transcribeVoiceStub(ctx, { mediaId: e.audio.id, mimeType: e.audio.mime_type, ai: !!llm });
               transcript = out.text;
               await ctx.appendMemory(ctx.client, { type: "inbound_audio", from, mediaId: e.audio.id, ts: e.timestamp, transcript, filePath: out.filePath });
               textForIntent = `${textForIntent}\n${transcript}`.trim();
@@ -275,7 +271,7 @@ async function startWebhookServer({
           }
           if (e.type === "image" && e.image?.id) {
             try {
-              const out = await describeImageStub(ctx, { mediaId: e.image.id, mimeType: e.image.mime_type });
+              const out = await describeImageStub(ctx, { mediaId: e.image.id, mimeType: e.image.mime_type, ai: !!llm });
               imageDesc = out.desc;
               await ctx.appendMemory(ctx.client, { type: "inbound_image", from, mediaId: e.image.id, ts: e.timestamp, desc: imageDesc, filePath: out.filePath });
               textForIntent = `${textForIntent}\n${imageDesc}`.trim();
@@ -318,7 +314,9 @@ async function startWebhookServer({
             }
           }
 
-          const last = lastInboundByFrom.get(from);
+          // Session window: for inbound-triggered replies, this is typically open.
+          // Still keep the check for safety and for any future outbound-only triggers.
+          const last = lastInboundByFrom.get(from) || (await getLastInboundAt({ client: ctx.client, from }));
           const sessionOpen = in24hWindow(e.timestamp || last, nowIso);
 
           // Flow routing (premium): if configured, advance the flow and ask the next question.
@@ -476,7 +474,7 @@ async function startWebhookServer({
         const overallRisk = hasOutbound ? "high" : "low";
 
           // Execute with confirmations. Even with --yes, high-risk steps should prompt unless allowHighRisk is set.
-          await executePlan(ctx, { steps, risk: overallRisk }, { yes: true, allowHighRisk: false, json: false });
+          await executePlan(ctx, { steps, risk: overallRisk }, { yes: true, allowHighRisk: !!allowHighRisk, json: false });
         }
       });
     } catch (err) {

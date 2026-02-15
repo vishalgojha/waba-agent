@@ -216,6 +216,7 @@ function registerWebhookCommands(program) {
     .option("--verbose", "log full webhook payloads (PII redacted)", false)
     .option("--llm", "use LLM (if configured) for lead classification + reply suggestion", false)
     .option("--allow-outbound", "allow outbound replies from webhook flow (still prompts for confirmation)", false)
+    .option("--allow-high-risk", "allow high-risk outbound tools without extra prompts (use only for trusted production configs)", false)
     .action(async (opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json, memory } = root.opts();
@@ -235,6 +236,7 @@ function registerWebhookCommands(program) {
         client: opts.client || cfg.activeClient || "default",
         verbose: !!opts.verbose,
         allowOutbound: !!opts.allowOutbound,
+        allowHighRisk: !!opts.allowHighRisk,
         memoryEnabled: memory !== false,
         enableNgrok: !!opts.ngrok,
         llm: !!opts.llm

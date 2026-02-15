@@ -213,6 +213,7 @@ Safety defaults:
 
 - No outbound replies unless you pass `--allow-outbound`.
 - Even with `--allow-outbound`, outbound steps require terminal confirmation (high-risk).
+- For production non-interactive servers, add `--allow-high-risk` (only after testing).
 
 ## Client Onboarding Wizard (Sellable)
 

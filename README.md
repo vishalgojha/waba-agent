@@ -104,7 +104,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba cost estimate|actual`
 - `waba optout add|list|check|remove`
 - `waba campaign create|import|schedule|run|status|stop|list`
-- `waba onboard --client acme`
+- `waba onboard --client acme --wizard`
 - `waba report weekly --client acme --email client@acme.com`
 - `waba flow create|add-step|show|list|test`
 - `waba payments enable|status|send-link|webhook-handler`
@@ -211,6 +211,20 @@ Safety defaults:
 
 - No outbound replies unless you pass `--allow-outbound`.
 - Even with `--allow-outbound`, outbound steps require terminal confirmation (high-risk).
+
+## Client Onboarding Wizard (Sellable)
+
+Fast setup for a new client: writes per-client defaults, creates the lead-qualification flow, and can generate local template drafts.
+
+```bash
+waba onboard --client acme --wizard --industry real-estate
+```
+
+Start webhook server as part of onboarding (blocks; use Ctrl+C to stop):
+
+```bash
+waba onboard --client acme --wizard --start-webhook --ngrok --verbose
+```
 
 ## Google Sheets Sync (Fastest CRM Upsell)
 

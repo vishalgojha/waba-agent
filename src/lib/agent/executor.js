@@ -35,23 +35,21 @@ async function executePlan(ctx, { steps, risk }, { yes = false, allowHighRisk = 
       continue;
     }
 
-    if (riskOrder(tool.risk) >= 3) {
-      if (!allowHighRisk) {
-        const ok = await askYesNo(`High-risk step: ${tool.name}. This may send outbound messages and incur costs. Continue?`, { defaultYes: false });
-        if (!ok) {
-          results.push({ tool: tool.name, ok: false, skipped: true, reason: "high_risk_denied" });
-          continue;
-        }
+    if (riskOrder(tool.risk) >= 3 && !allowHighRisk) {
+      const ok = await askYesNo(`High-risk step: ${tool.name}. This may send outbound messages and incur costs. Continue?`, { defaultYes: false });
+      if (!ok) {
+        results.push({ tool: tool.name, ok: false, skipped: true, reason: "high_risk_denied" });
+        continue;
       }
     }
 
-    logger.info(`▶ ${tool.name}`);
+    logger.info(`>> ${tool.name}`);
     try {
       const out = await tool.execute(ctx, s.args);
-      logger.ok(`✔ ${tool.name}`);
+      logger.ok(`[OK] ${tool.name}`);
       results.push({ tool: tool.name, ok: true, out });
     } catch (err) {
-      logger.error(`✘ ${tool.name}: ${err?.message || err}`);
+      logger.error(`[ERR] ${tool.name}: ${err?.message || err}`);
       results.push({ tool: tool.name, ok: false, error: String(err?.message || err) });
       // Fail fast; businesses hate silent partial states.
       break;
@@ -62,3 +60,4 @@ async function executePlan(ctx, { steps, risk }, { yes = false, allowHighRisk = 
 }
 
 module.exports = { executePlan };
+

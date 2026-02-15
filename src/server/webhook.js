@@ -13,6 +13,8 @@ const { executePlan } = require("../lib/agent/executor");
 const { contextDir, wabaHome } = require("../lib/paths");
 const { safeName } = require("../lib/memory");
 const { addOptout, isOptedOut } = require("../lib/optout-store");
+const { handleInboundWithFlow } = require("../lib/flow-engine");
+const { getClientConfig } = require("../lib/client-config");
 
 function redactPhone(s) {
   const t = String(s || "");
@@ -51,15 +53,8 @@ function redactPayload(payload) {
 }
 
 async function readClientConfig(client) {
-  const name = safeName(client || "default");
-  const p = path.join(contextDir(), name, "client.json");
-  if (!(await fs.pathExists(p))) return null;
-  try {
-    const cfg = await fs.readJson(p);
-    return cfg && typeof cfg === "object" ? cfg : null;
-  } catch {
-    return null;
-  }
+  // Backward-compatible helper; prefer getClientConfig.
+  return getClientConfig(client);
 }
 
 function in24hWindow(lastInboundIso, nowIso) {
@@ -295,18 +290,51 @@ async function startWebhookServer({
           const last = lastInboundByFrom.get(from);
           const sessionOpen = in24hWindow(e.timestamp || last, nowIso);
 
-          // Build a small tool-only plan.
-        const steps = buildReplyPlan({
-          ctx,
-          clientCfg,
-          from,
-          intent,
-          sessionOpen,
-          textForReply: textForIntent,
-          replyOverride
-        }).filter(Boolean);
+          // Flow routing (premium): if configured, advance the flow and ask the next question.
+          const flowName =
+            clientCfg?.flows?.intentMap?.[intent] ||
+            clientCfg?.flows?.active ||
+            null;
 
-        if (!allowOutbound) {
+          let steps = null;
+          if (flowName) {
+            const flowRes = await handleInboundWithFlow({
+              client: ctx.client,
+              from,
+              inboundText: textForIntent,
+              flowName,
+              nowIso
+            });
+            if (flowRes.ok && flowRes.message?.body) {
+              steps = [
+                {
+                  tool: "memory.note",
+                  args: { client: ctx.client, text: `Flow=${flowName} action=${flowRes.action} intent=${intent} from=${redactPhone(from)}` },
+                  reason: "Record flow progression."
+                },
+                {
+                  tool: "message.send_text",
+                  args: { to: from, body: flowRes.message.body, category: "utility" },
+                  reason: "Flow next step."
+                }
+              ];
+            }
+          }
+
+          // Fallback: old intent reply plan.
+          if (!steps) {
+            steps = buildReplyPlan({
+              ctx,
+              clientCfg,
+              from,
+              intent,
+              sessionOpen,
+              textForReply: textForIntent,
+              replyOverride
+            }).filter(Boolean);
+          }
+
+          if (!allowOutbound) {
             // Remove outbound steps; still show plan via executor.
             const filtered = steps.filter((s) => s.tool !== "message.send_text" && s.tool !== "template.send");
             logger.warn("Outbound is disabled. Re-run with --allow-outbound to actually reply.");

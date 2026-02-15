@@ -98,6 +98,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba campaign create|import|schedule|run|status|stop|list`
 - `waba onboard --client acme`
 - `waba report weekly --client acme --email client@acme.com`
+- `waba flow create|add-step|show|list|test`
 
 Global flags:
 
@@ -303,6 +304,31 @@ Compare local drafts vs remote templates:
 ```bash
 waba template sync-drafts --client acme
 ```
+
+## Flow Builder (Premium Feature)
+
+Create a lead qualification flow (preset):
+
+```bash
+waba flow create lead-qualification --client acme
+```
+
+Add a custom question:
+
+```bash
+waba flow add-step --client acme --flow lead-qualification --type question --field preferred_time --text "What time works best for you?"
+```
+
+Test locally (no WhatsApp send):
+
+```bash
+waba flow test --client acme --flow lead-qualification --from 919812345678 --text "Hi"
+```
+
+Webhook integration:
+
+- `client.json` includes `flows.active` and `flows.intentMap`
+- When enabled, incoming messages advance the flow and the webhook server proposes the next outbound question/reply.
 
 Security notes:
 

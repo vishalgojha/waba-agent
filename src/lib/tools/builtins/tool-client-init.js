@@ -32,6 +32,17 @@ function toolClientInit() {
           // welcome: { "name": "welcome_template_name", "language": "en" }
           welcome: null
         },
+        flows: {
+          // Default flow mapping. Create/edit flows under ~/.waba/context/<client>/flows/
+          active: "lead-qualification",
+          intentMap: {
+            greeting: "lead-qualification",
+            price_inquiry: "lead-qualification",
+            booking_request: "lead-qualification",
+            order_intent: "lead-qualification",
+            unknown: "lead-qualification"
+          }
+        },
         intentReplies: {
           greeting: "Thanks for contacting us. Please share your name and requirement. We'll reply shortly.",
           price_inquiry: "Sure. Please share the product/service name and your location. We'll send pricing and options.",
@@ -53,10 +64,15 @@ function toolClientInit() {
       try {
         await fs.chmod(p, 0o600);
       } catch {}
+
+      // Scaffold default flow.
+      try {
+        const { ensurePresetFlow } = require("../../flow-store");
+        await ensurePresetFlow(client, "lead-qualification");
+      } catch {}
       return { ok: true, path: p, created: true };
     }
   };
 }
 
 module.exports = { toolClientInit };
-

@@ -18,6 +18,7 @@ const { registerOptoutCommands } = require("./commands/optout");
 const { registerCampaignCommands } = require("./commands/campaign");
 const { registerOnboardCommands } = require("./commands/onboard");
 const { registerReportCommands } = require("./commands/report");
+const { registerFlowCommands } = require("./commands/flow");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -61,6 +62,7 @@ async function main() {
   registerCampaignCommands(program);
   registerOnboardCommands(program);
   registerReportCommands(program);
+  registerFlowCommands(program);
 
   program
     .command("doctor")

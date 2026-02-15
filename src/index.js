@@ -14,6 +14,9 @@ const { registerAnalyticsCommands } = require("./commands/analytics");
 const { registerIntegrateCommands } = require("./commands/integrate");
 const { registerSyncCommands } = require("./commands/sync");
 const { registerCostCommands } = require("./commands/cost");
+const { registerOptoutCommands } = require("./commands/optout");
+const { registerCampaignCommands } = require("./commands/campaign");
+const { registerOnboardCommands } = require("./commands/onboard");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -53,6 +56,9 @@ async function main() {
   registerIntegrateCommands(program);
   registerSyncCommands(program);
   registerCostCommands(program);
+  registerOptoutCommands(program);
+  registerCampaignCommands(program);
+  registerOnboardCommands(program);
 
   program
     .command("doctor")

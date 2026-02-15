@@ -92,6 +92,9 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba integrate google-sheets`
 - `waba sync leads --to sheets`
 - `waba cost estimate|actual`
+- `waba optout add|list|check|remove`
+- `waba campaign create|import|schedule|run|status|stop|list`
+- `waba onboard --client acme`
 
 Global flags:
 
@@ -195,6 +198,32 @@ waba integrate google-sheets --client acme --apps-script-url "<WEB_APP_URL>" --t
 
 ```bash
 waba sync leads --to sheets --client acme --days 30
+```
+
+## Opt-Out Compliance (Required)
+
+```bash
+waba optout add 919812345678 --reason "user-request" --client acme
+waba optout check 919812345678 --client acme
+waba optout list --client acme
+```
+
+Outbound sends and campaigns will refuse to message opted-out numbers.
+
+## Broadcast Campaigns (Revenue Feature)
+
+Create + import audience + run (template-only):
+
+```bash
+waba campaign create "summer-sale" --template sale_offer --language en --client acme
+waba campaign import --id <CAMPAIGN_ID> --csv leads.csv
+waba campaign run --id <CAMPAIGN_ID> --throttle-ms 400
+```
+
+Stop automatically if opt-out rate is too high:
+
+```bash
+waba campaign run --id <CAMPAIGN_ID> --stop-optout-rate 0.05
 ```
 
 Security notes:

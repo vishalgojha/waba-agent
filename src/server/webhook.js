@@ -12,6 +12,7 @@ const { createAgentContext } = require("../lib/agent/agent");
 const { executePlan } = require("../lib/agent/executor");
 const { contextDir, wabaHome } = require("../lib/paths");
 const { safeName } = require("../lib/memory");
+const { addOptout, isOptedOut } = require("../lib/optout-store");
 
 function redactPhone(s) {
   const t = String(s || "");
@@ -125,6 +126,14 @@ function buildReplyPlan({ ctx, clientCfg, from, intent, sessionOpen, textForRepl
   }
 
   return steps;
+}
+
+function isOptoutText(text) {
+  const t = String(text || "").trim().toLowerCase();
+  if (!t) return false;
+  if (/^(stop|unsubscribe|cancel|dnd|opt\s*out|remove)\b/.test(t)) return true;
+  if (/\b(stop|unsubscribe|dnd|do\s*not\s*message)\b/.test(t)) return true;
+  return false;
 }
 
 async function startWebhookServer({
@@ -258,6 +267,16 @@ async function startWebhookServer({
           const clientCfg = await readClientConfig(ctx.client);
           let intent = ruleBasedIntent(textForIntent || "").intent;
           let replyOverride = null;
+
+          // Compliance: auto-opt-out on STOP/UNSUBSCRIBE.
+          if (isOptoutText(textForIntent)) {
+            const already = await isOptedOut(ctx.client, from);
+            await addOptout(ctx.client, from, { reason: "user-request", source: "inbound-stop" });
+            await ctx.appendMemory(ctx.client, { type: "optout_added", from, already, ts: nowIso, text: textForIntent });
+            logger.warn(`opt-out recorded for ${redactPhone(from)} (${ctx.client})`);
+            // Do not auto-reply; outbound from server requires interactive confirmation.
+            continue;
+          }
 
           if (llm && ctx.config?.openaiApiKey && textForIntent) {
             try {

@@ -21,4 +21,12 @@ function schedulesPath() {
   return path.join(wabaHome(), "schedules.json");
 }
 
-module.exports = { wabaHome, configPath, contextDir, schedulesPath };
+function optoutDir() {
+  return path.join(wabaHome(), "optout");
+}
+
+function campaignsDir() {
+  return path.join(wabaHome(), "campaigns");
+}
+
+module.exports = { wabaHome, configPath, contextDir, schedulesPath, optoutDir, campaignsDir };

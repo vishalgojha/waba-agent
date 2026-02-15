@@ -1,6 +1,7 @@
 const dayjs = require("dayjs");
 
 const { readSchedules, writeSchedules } = require("../../schedule-store");
+const { isOptedOut } = require("../../optout-store");
 
 function toolScheduleRunDue() {
   return {
@@ -17,6 +18,9 @@ function toolScheduleRunDue() {
       for (const item of due) {
         try {
           if (item.kind === "text") {
+            if (await isOptedOut(item.client || ctx.client || "default", item.to)) {
+              throw new Error("Recipient opted out.");
+            }
             const res = await ctx.whatsapp.sendText({ to: item.to, body: item.body });
             item.status = "sent";
             item.sentAt = new Date().toISOString();

@@ -1,4 +1,5 @@
 const fs = require("fs-extra");
+const os = require("os");
 const path = require("path");
 
 const { configPath, wabaHome } = require("./paths");
@@ -7,7 +8,12 @@ const { logger } = require("./logger");
 async function readConfigRaw() {
   const p = configPath();
   try {
-    if (!(await fs.pathExists(p))) return {};
+    if (!(await fs.pathExists(p))) {
+      // Backward compatibility: older default home was ~/.waba-agent
+      const legacy = path.join(os.homedir(), ".waba-agent", "config.json");
+      if (await fs.pathExists(legacy)) return await fs.readJson(legacy);
+      return {};
+    }
     const data = await fs.readJson(p);
     return data && typeof data === "object" ? data : {};
   } catch (err) {

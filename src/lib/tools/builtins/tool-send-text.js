@@ -9,6 +9,10 @@ function toolSendText() {
       if (!to) throw new Error("Missing `to`.");
       if (!body) throw new Error("Missing `body`.");
 
+      if (ctx.optout?.isOptedOut && (await ctx.optout.isOptedOut(to))) {
+        throw new Error("Recipient is opted out. Use `waba optout remove <number>` only if you have explicit consent.");
+      }
+
       const res = await ctx.whatsapp.sendText({ to, body, previewUrl: !!args?.previewUrl });
       await ctx.appendMemory(ctx.client || "default", {
         type: "outbound_sent",

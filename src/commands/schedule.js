@@ -5,6 +5,7 @@ const { WhatsAppCloudApi } = require("../lib/whatsapp");
 const { readSchedules, writeSchedules } = require("../lib/schedule-store");
 const { askYesNo } = require("../lib/prompt");
 const { logger } = require("../lib/logger");
+const { isOptedOut } = require("../lib/optout-store");
 
 function registerScheduleCommands(program) {
   const s = program.command("schedule").description("outbound scheduling (stores locally; run `schedule run` to send due)");
@@ -40,7 +41,7 @@ function registerScheduleCommands(program) {
       }
       logger.ok(`Scheduled ${item.id} at ${item.runAt}`);
       logger.info(`Stored in ${p}`);
-      logger.warn("Costs: this will send an outbound message later (India approx: ~₹0.11 utility, ~₹0.78 marketing; verify current rates).");
+      logger.warn("Costs: this will send an outbound message later (India approx: ~INR 0.11 utility, ~INR 0.78 marketing; verify current rates).");
     });
 
   s.command("list")
@@ -114,6 +115,9 @@ function registerScheduleCommands(program) {
       for (const item of due) {
         try {
           if (item.kind === "text") {
+            if (await isOptedOut(item.client || cfg.activeClient || "default", item.to)) {
+              throw new Error("Recipient opted out.");
+            }
             const res = await api.sendText({ to: item.to, body: item.body });
             item.status = "sent";
             item.sentAt = new Date().toISOString();

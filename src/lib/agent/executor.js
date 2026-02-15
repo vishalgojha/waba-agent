@@ -22,7 +22,7 @@ async function executePlan(ctx, { steps, risk }, { yes = false, allowHighRisk = 
   logger.info("Plan:");
   for (let i = 0; i < steps.length; i++) logger.info(formatStep(steps[i], i));
   logger.warn(`Overall risk: ${risk}`);
-  logger.warn("Costs: WhatsApp Cloud API is per-message billed (India approx: ~₹0.11 utility, ~₹0.78 marketing; verify current rates in Meta).");
+  logger.warn("Costs: WhatsApp Cloud API is per-message billed (India approx: ~INR 0.11 utility, ~INR 0.78 marketing; verify current rates in Meta).");
 
   const proceed = yes ? true : await askYesNo(`Execute ${steps.length} step(s)?`, { defaultYes: false });
   if (!proceed) return { ok: true, executed: false };

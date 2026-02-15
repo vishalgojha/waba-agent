@@ -11,6 +11,10 @@ function toolSendTemplate() {
       if (!to) throw new Error("Missing `to`.");
       if (!templateName) throw new Error("Missing `templateName`.");
 
+      if (ctx.optout?.isOptedOut && (await ctx.optout.isOptedOut(to))) {
+        throw new Error("Recipient is opted out. Use `waba optout remove <number>` only if you have explicit consent.");
+      }
+
       const res = await ctx.whatsapp.sendTemplate({ to, templateName, language, params });
       await ctx.appendMemory(ctx.client || "default", {
         type: "outbound_sent",

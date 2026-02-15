@@ -13,15 +13,23 @@ Production-focused CLI for WhatsApp Business Cloud API automation (India SMB use
 
 ## Install
 
+From npm (recommended for users):
+
 ```bash
-cd waba-agent
-npm i
-npm link
+npm i -g @vishalgojha/waba-agent
 ```
 
 If PowerShell blocks `npm` (execution policy), use:
 
 ```bash
+npm.cmd i -g @vishalgojha/waba-agent
+```
+
+From source (recommended for contributors):
+
+```bash
+git clone https://github.com/vishalgojha/waba-agent.git
+cd waba-agent
 npm.cmd i
 npm.cmd link
 ```
@@ -82,7 +90,6 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba auth login|status|logout`
 - `waba webhook setup|start|serve|validate|test`
 - `waba template list`
-- `waba template create|preview|submit-for-approval|analytics|drafts`
 - `waba template create|preview|submit-for-approval|status|wait|analytics|drafts|sync-drafts`
 - `waba send template|text`
 - `waba agent run`
@@ -100,6 +107,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba onboard --client acme`
 - `waba report weekly --client acme --email client@acme.com`
 - `waba flow create|add-step|show|list|test`
+- `waba payments enable|status|send-link|webhook-handler`
 
 Global flags:
 
@@ -333,6 +341,27 @@ Compare local drafts vs remote templates:
 
 ```bash
 waba template sync-drafts --client acme
+```
+
+## Payments (India) - Razorpay
+
+Enable:
+
+```bash
+waba payments enable razorpay --client acme --key "<KEY_ID>" --secret "<KEY_SECRET>" --webhook-secret "<WEBHOOK_SECRET>"
+waba payments status --client acme
+```
+
+Send a payment link (high risk: outbound):
+
+```bash
+waba payments send-link --client acme --to 919812345678 --amount 5000 --desc "Consultation fee" 
+```
+
+Webhook handler (for payment events):
+
+```bash
+waba payments webhook-handler start --client acme --port 3002
 ```
 
 ## Flow Builder (Premium Feature)

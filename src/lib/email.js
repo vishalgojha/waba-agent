@@ -1,4 +1,17 @@
-const nodemailer = require("nodemailer");
+function getNodemailer() {
+  try {
+    // Lazy-require so the CLI can still run if deps weren't installed correctly.
+    // This also avoids crashing on startup for users who don't use email features.
+    // eslint-disable-next-line global-require
+    return require("nodemailer");
+  } catch (err) {
+    const msg =
+      err?.code === "MODULE_NOT_FOUND"
+        ? "Missing dependency 'nodemailer'."
+        : `Failed to load 'nodemailer': ${err?.message || err}`;
+    throw new Error(`${msg} Run: npm i (or npm.cmd i on Windows PowerShell).`);
+  }
+}
 
 function boolEnv(name, fallback = false) {
   const v = process.env[name];
@@ -29,6 +42,7 @@ function getSmtpConfig() {
 
 function createTransport() {
   const cfg = getSmtpConfig();
+  const nodemailer = getNodemailer();
   if (cfg.url) return nodemailer.createTransport(cfg.url);
 
   if (!cfg.host) throw new Error("Missing SMTP config. Set WABA_SMTP_URL or WABA_SMTP_HOST/WABA_SMTP_USER/WABA_SMTP_PASS.");
@@ -59,4 +73,3 @@ async function sendEmail({ to, subject, html, text, cc, bcc, from }) {
 }
 
 module.exports = { getSmtpConfig, sendEmail };
-

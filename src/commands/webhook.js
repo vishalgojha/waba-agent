@@ -186,7 +186,7 @@ function registerWebhookCommands(program) {
                 const out = await tool.execute(ctx, { client: opts.client, text: m.text });
                 const r = out?.result || {};
                 const reply = containsHindi(m.text) ? (r.nextReplyHindi || r.nextReplyEnglish) : (r.nextReplyEnglish || r.nextReplyHindi);
-                const body = reply || "Thanks for messaging. Please share your name and requirement, and we’ll get back shortly.";
+                const body = reply || "Thanks for messaging. Please share your name and requirement, and we'll get back shortly.";
                 logger.warn("Auto-reply sending outbound text (may incur per-message fees).");
                 const sent = await api.sendText({ to: m.from, body });
                 await memAppend(opts.client, { type: "auto_reply_sent", to: m.from, body, sent });

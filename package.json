@@ -1,5 +1,5 @@
 {
-  "name": "waba-agent",
+  "name": "@vishalgojha/waba-agent",
   "version": "0.1.0",
   "description": "CLI + agent toolkit for WhatsApp Business Cloud API automation (India SMB focused).",
   "license": "MIT",
@@ -23,6 +23,15 @@
     "waba": "bin/waba.js",
     "waba-agent": "bin/waba.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "start": "node bin/waba.js",
     "test": "node scripts/smoke.js"
@@ -37,6 +46,7 @@
     "figlet": "^1.8.0",
     "fs-extra": "^11.2.0",
     "ngrok": "^5.0.0-beta.2",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^6.9.16",
+    "razorpay": "^2.9.6"
   }
 }

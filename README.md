@@ -111,6 +111,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba deploy render docker`
 - `waba logs tail`
 - `waba leads missed`
+- `waba export leads`
 
 Global flags:
 
@@ -257,6 +258,20 @@ Find leads who messaged but did not get a reply yet (from local memory logs):
 
 ```bash
 waba leads missed --client acme --since 24h --min-age 5m
+```
+
+## Export (Sales Demo)
+
+Export unique leads to CSV (from local memory + flow state):
+
+```bash
+waba export leads --client acme --since 7d --out leads.csv
+```
+
+Export and push to Google Sheets (requires `integrate google-sheets`):
+
+```bash
+waba export leads --client acme --since 7d --to sheets
 ```
 
 ## Follow-Ups (Compliant)

@@ -95,6 +95,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba optout add|list|check|remove`
 - `waba campaign create|import|schedule|run|status|stop|list`
 - `waba onboard --client acme`
+- `waba report weekly --client acme --email client@acme.com`
 
 Global flags:
 
@@ -111,29 +112,49 @@ waba-agent/
   src/commands/
     agent.js
     auth.js
+    analytics.js
+    campaign.js
+    clients.js
+    cost.js
+    integrate.js
     memory.js
+    onboard.js
+    optout.js
+    report.js
     schedule.js
     send.js
+    sync.js
     template.js
     webhook.js
   src/lib/
     agent/ (planner + executor)
     ai/openai.js
+    analytics.js
+    campaign-runner.js
+    campaign-store.js
+    client-config.js
+    clients.js
     config.js
     doctor.js
+    email.js
     graph-error.js
     http.js
     logger.js
     memory.js
+    message-parser.js
+    multimodal-stubs.js
+    optout-store.js
     paths.js
     prompt.js
     redact.js
+    report.js
     schedule-store.js
     tools.js
     tools/ (registry + builtins)
     webhook/ (server + signature + parse + payloads)
     whatsapp.js
   src/server/
+    analytics.js
     webhook.js
 ```
 
@@ -224,6 +245,26 @@ Stop automatically if opt-out rate is too high:
 
 ```bash
 waba campaign run --id <CAMPAIGN_ID> --stop-optout-rate 0.05
+```
+
+## Weekly Reports (Sales Enabler)
+
+Generate + save HTML report:
+
+```bash
+waba report weekly --client acme
+```
+
+Send via SMTP (set env vars):
+
+```bash
+setx WABA_SMTP_HOST "smtp.gmail.com"
+setx WABA_SMTP_PORT "587"
+setx WABA_SMTP_USER "you@gmail.com"
+setx WABA_SMTP_PASS "app-password"
+setx WABA_SMTP_FROM "Reports <you@gmail.com>"
+
+waba report weekly --client acme --email client@acme.com
 ```
 
 Security notes:

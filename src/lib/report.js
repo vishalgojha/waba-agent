@@ -1,0 +1,185 @@
+const fs = require("fs-extra");
+const path = require("path");
+const dayjs = require("dayjs");
+
+const { computeMetrics } = require("./analytics");
+const { reportsDir } = require("./paths");
+const { safeName, readMemory } = require("./memory");
+const { readOptouts } = require("./optout-store");
+const { listCampaigns } = require("./campaign-store");
+
+function redactPhone(s) {
+  const t = String(s || "");
+  if (t.length <= 6) return "***";
+  return `${t.slice(0, 2)}***${t.slice(-4)}`;
+}
+
+function fmtNum(n, digits = 1) {
+  if (n === null || n === undefined) return "-";
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "-";
+  return x.toFixed(digits);
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function topIntents(intentCounts, limit = 6) {
+  const entries = Object.entries(intentCounts || {});
+  entries.sort((a, b) => (b[1] || 0) - (a[1] || 0));
+  return entries.slice(0, limit);
+}
+
+function reportHtml({ title, subtitle, metrics, optoutsCount, campaignsSummary, samples }) {
+  const intents = topIntents(metrics.funnel?.intents || {}, 8);
+  const cost = metrics.costs?.inr?.totalKnown ?? 0;
+
+  const sampleHtml = samples?.length
+    ? `<h3>Recent inbound samples (redacted)</h3>
+<table>
+  <thead><tr><th>When</th><th>From</th><th>Type</th><th>Text</th></tr></thead>
+  <tbody>
+  ${samples
+    .map((s) => `<tr><td>${escapeHtml(s.ts)}</td><td>${escapeHtml(s.from)}</td><td>${escapeHtml(s.msgType)}</td><td>${escapeHtml(s.text || "")}</td></tr>`)
+    .join("\n")}
+  </tbody>
+</table>`
+    : "";
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; color: #111; }
+      .muted { color: #555; }
+      .grid { display: flex; gap: 12px; flex-wrap: wrap; }
+      .card { border: 1px solid #e6e6e6; border-radius: 12px; padding: 12px 14px; min-width: 260px; background: #fff; }
+      h1 { margin: 0 0 6px 0; font-size: 20px; }
+      h2 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
+      h3 { margin: 18px 0 10px; font-size: 14px; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #eee; padding: 8px; font-size: 12px; vertical-align: top; }
+      th { background: #fafafa; text-align: left; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      .pill { display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid #ddd; font-size:12px; margin-right:6px; }
+    </style>
+  </head>
+  <body>
+    <h1>${escapeHtml(title)}</h1>
+    <div class="muted">${escapeHtml(subtitle)}</div>
+    <div style="height:12px"></div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Lead Volume</h2>
+        <div><b>${metrics.leads.uniqueSenders}</b> unique senders</div>
+        <div><b>${metrics.leads.inboundMessages}</b> inbound messages</div>
+      </div>
+      <div class="card">
+        <h2>Response Times</h2>
+        <div>avg: <b>${fmtNum(metrics.responses.avgMinutes)}</b> min</div>
+        <div>p50: <b>${fmtNum(metrics.responses.p50Minutes)}</b> min</div>
+        <div>p90: <b>${fmtNum(metrics.responses.p90Minutes)}</b> min</div>
+        <div class="muted">samples: ${metrics.responses.samples}</div>
+      </div>
+      <div class="card">
+        <h2>Costs (Estimate)</h2>
+        <div>known total: <b>INR ${fmtNum(cost, 2)}</b></div>
+        <div class="muted">utility: ${metrics.costs.messages.utility}, marketing: ${metrics.costs.messages.marketing}, unknown: ${metrics.costs.messages.unknown}</div>
+      </div>
+      <div class="card">
+        <h2>Compliance</h2>
+        <div>opt-outs: <b>${optoutsCount}</b></div>
+        <div class="muted">Outbound sends are blocked for opted-out numbers.</div>
+      </div>
+    </div>
+
+    <h3>Top Intents</h3>
+    <div>
+      ${intents.length ? intents.map(([k, v]) => `<span class="pill">${escapeHtml(k)}: <b>${v}</b></span>`).join(" ") : "<span class='muted'>No intent data yet.</span>"}
+    </div>
+
+    <h3>Campaigns</h3>
+    <div class="muted">${escapeHtml(campaignsSummary || "No campaigns found.")}</div>
+
+    ${sampleHtml}
+
+    <h3>Next Actions (Agency Playbook)</h3>
+    <ul>
+      <li>If p90 response is high: add auto-replies + handoff rules, and ensure staff notifications.</li>
+      <li>If many unknown intents: enable <code>--llm</code> in webhook server and tune client <code>intentReplies</code>.</li>
+      <li>If marketing spend is high: use template-only campaigns + throttling + opt-out stop rules.</li>
+    </ul>
+
+    <div class="muted">Generated by waba-agent on ${escapeHtml(new Date().toISOString())}.</div>
+  </body>
+</html>`;
+}
+
+async function buildRecentSamples(client, { limit = 10 } = {}) {
+  const events = await readMemory(client, { limit: 5000 });
+  const inbound = events.filter((e) => e.type === "inbound_message" || e.type === "inbound_text");
+  inbound.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  return inbound.slice(0, limit).map((e) => ({
+    ts: e.ts,
+    from: redactPhone(e.from),
+    msgType: e.msgType || e.type,
+    text: e.text ? String(e.text).slice(0, 180) : ""
+  }));
+}
+
+async function generateWeeklyReport({ client, days = 7, pricing, includeSamples = false } = {}) {
+  const metrics = await computeMetrics({ client, days, pricing });
+  const optouts = await readOptouts(client);
+  const campaigns = (await listCampaigns()).filter((c) => (c.client || "default") === client);
+
+  let campaignsSummary = "No campaigns found.";
+  if (campaigns.length) {
+    const recent = campaigns.slice(0, 5);
+    campaignsSummary = recent
+      .map((c) => `${c.id} ${c.status} audience=${c.audience?.length || 0} sent=${c.progress?.sent || 0} failed=${c.progress?.failed || 0}`)
+      .join(" | ");
+  }
+
+  const end = dayjs();
+  const start = dayjs().subtract(days, "day");
+  const title = `Weekly WhatsApp Report: ${client}`;
+  const subtitle = `Window: ${start.format("YYYY-MM-DD")} to ${end.format("YYYY-MM-DD")} (${days} days)`;
+
+  const samples = includeSamples ? await buildRecentSamples(client, { limit: 12 }) : [];
+  const html = reportHtml({ title, subtitle, metrics, optoutsCount: optouts.length, campaignsSummary, samples });
+  const text =
+    `${title}\n${subtitle}\n\n` +
+    `Leads: ${metrics.leads.uniqueSenders} unique, ${metrics.leads.inboundMessages} inbound\n` +
+    `Response (min): avg=${fmtNum(metrics.responses.avgMinutes)} p50=${fmtNum(metrics.responses.p50Minutes)} p90=${fmtNum(metrics.responses.p90Minutes)} samples=${metrics.responses.samples}\n` +
+    `Costs (known INR): ${fmtNum(metrics.costs.inr.totalKnown, 2)} (utility=${metrics.costs.messages.utility}, marketing=${metrics.costs.messages.marketing}, unknown=${metrics.costs.messages.unknown})\n` +
+    `Opt-outs: ${optouts.length}\n` +
+    `Campaigns: ${campaignsSummary}\n`;
+
+  const subject = `${client} WhatsApp Weekly Report (${end.format("YYYY-MM-DD")})`;
+  return { subject, html, text, metrics };
+}
+
+async function writeWeeklyReportFile({ client, html, suffix } = {}) {
+  const dir = path.join(reportsDir(), safeName(client), "weekly");
+  await fs.ensureDir(dir);
+  const stamp = suffix || dayjs().format("YYYY-MM-DD");
+  const p = path.join(dir, `weekly_${stamp}.html`);
+  await fs.writeFile(p, html, "utf8");
+  return p;
+}
+
+module.exports = {
+  generateWeeklyReport,
+  writeWeeklyReportFile
+};
+

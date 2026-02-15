@@ -29,4 +29,8 @@ function campaignsDir() {
   return path.join(wabaHome(), "campaigns");
 }
 
-module.exports = { wabaHome, configPath, contextDir, schedulesPath, optoutDir, campaignsDir };
+function reportsDir() {
+  return path.join(wabaHome(), "reports");
+}
+
+module.exports = { wabaHome, configPath, contextDir, schedulesPath, optoutDir, campaignsDir, reportsDir };

@@ -9,6 +9,11 @@ const { registerSendCommands } = require("./commands/send");
 const { registerAgentCommands } = require("./commands/agent");
 const { registerMemoryCommands } = require("./commands/memory");
 const { registerScheduleCommands } = require("./commands/schedule");
+const { registerClientsCommands } = require("./commands/clients");
+const { registerAnalyticsCommands } = require("./commands/analytics");
+const { registerIntegrateCommands } = require("./commands/integrate");
+const { registerSyncCommands } = require("./commands/sync");
+const { registerCostCommands } = require("./commands/cost");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -43,6 +48,11 @@ async function main() {
   registerAgentCommands(program);
   registerMemoryCommands(program);
   registerScheduleCommands(program);
+  registerClientsCommands(program);
+  registerAnalyticsCommands(program);
+  registerIntegrateCommands(program);
+  registerSyncCommands(program);
+  registerCostCommands(program);
 
   program
     .command("doctor")

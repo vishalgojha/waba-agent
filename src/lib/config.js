@@ -36,8 +36,38 @@ function envOr(current, envKeys) {
   return current;
 }
 
+function normalizeMultiClient(raw) {
+  const cfg = raw && typeof raw === "object" ? { ...raw } : {};
+  cfg.clients = cfg.clients && typeof cfg.clients === "object" ? { ...cfg.clients } : {};
+
+  // Backward compatibility: single-tenant fields stored at top-level.
+  const hasLegacyCreds = !!(cfg.token || cfg.phoneNumberId || cfg.wabaId);
+  if (hasLegacyCreds && !cfg.clients.default) {
+    cfg.clients.default = {
+      token: cfg.token,
+      phoneNumberId: cfg.phoneNumberId,
+      wabaId: cfg.wabaId
+    };
+  }
+
+  if (!cfg.activeClient) cfg.activeClient = "default";
+  if (!cfg.clients[cfg.activeClient]) cfg.clients[cfg.activeClient] = {};
+
+  return cfg;
+}
+
 async function getConfig() {
-  const cfg = await readConfigRaw();
+  const raw = await readConfigRaw();
+  const cfg = normalizeMultiClient(raw);
+
+  const activeName = cfg.activeClient || "default";
+  const active = cfg.clients?.[activeName] || {};
+
+  // Expose active client fields at top-level for convenience.
+  cfg.token = active.token || cfg.token;
+  cfg.phoneNumberId = active.phoneNumberId || cfg.phoneNumberId;
+  cfg.wabaId = active.wabaId || cfg.wabaId;
+
   cfg.graphVersion = envOr(cfg.graphVersion, ["WABA_GRAPH_VERSION"]);
   cfg.baseUrl = envOr(cfg.baseUrl, ["WABA_BASE_URL"]); // e.g. https://graph.facebook.com
 
@@ -54,18 +84,23 @@ async function getConfig() {
   cfg.openaiVisionModel = envOr(cfg.openaiVisionModel, ["WABA_OPENAI_VISION_MODEL"]);
   cfg.openaiTranscribeModel = envOr(cfg.openaiTranscribeModel, ["WABA_OPENAI_TRANSCRIBE_MODEL"]);
 
+  cfg.pricing = cfg.pricing && typeof cfg.pricing === "object" ? cfg.pricing : {};
+  // Rough ballpark defaults (verify current Meta rates).
+  cfg.pricing.inrPerUtility = Number(cfg.pricing.inrPerUtility ?? 0.11);
+  cfg.pricing.inrPerMarketing = Number(cfg.pricing.inrPerMarketing ?? 0.78);
+
   return cfg;
 }
 
 async function setConfig(patch) {
-  const prev = await readConfigRaw();
+  const prev = normalizeMultiClient(await readConfigRaw());
   const next = { ...prev, ...patch };
   const p = await writeConfigRaw(next);
   return { path: p, config: next };
 }
 
 async function clearConfig(keys) {
-  const prev = await readConfigRaw();
+  const prev = normalizeMultiClient(await readConfigRaw());
   const next = { ...prev };
   for (const k of keys) delete next[k];
   const p = await writeConfigRaw(next);
@@ -80,6 +115,8 @@ module.exports = {
   getConfig,
   setConfig,
   clearConfig,
-  getDefaultGraphVersion
+  getDefaultGraphVersion,
+  readConfigRaw,
+  writeConfigRaw,
+  normalizeMultiClient
 };
-

@@ -211,7 +211,7 @@ function registerWebhookCommands(program) {
     .option("--host <host>", "bind host (default: 127.0.0.1; use 0.0.0.0 for containers)", "127.0.0.1")
     .option("--port <n>", "port", (v) => Number(v), 3000)
     .option("--path <path>", "path (default: /webhook)", "/webhook")
-    .option("--client <name>", "client name (memory + config)", "default")
+    .option("--client <name>", "client name (memory + config). Default: active client")
     .option("--ngrok", "start an ngrok tunnel (requires ngrok + auth token)", false)
     .option("--verbose", "log full webhook payloads (PII redacted)", false)
     .option("--llm", "use LLM (if configured) for lead classification + reply suggestion", false)
@@ -232,7 +232,7 @@ function registerWebhookCommands(program) {
         pathName: opts.path,
         verifyToken: cfg.webhookVerifyToken,
         appSecret: cfg.appSecret,
-        client: opts.client,
+        client: opts.client || cfg.activeClient || "default",
         verbose: !!opts.verbose,
         allowOutbound: !!opts.allowOutbound,
         memoryEnabled: memory !== false,

@@ -19,6 +19,7 @@ function registerSendCommands(program) {
     .argument("<to_number>", "E.164 without + (example: 9198xxxxxx)")
     .requiredOption("--template-name <name>", "template name")
     .requiredOption("--language <code>", "language code (example: en)")
+    .option("--category <utility|marketing>", "category tag for local analytics (does not affect Meta)", "utility")
     .option("--params <json>", "template params JSON: array for body params OR object for components")
     .action(async (to, opts, cmd) => {
       const root = cmd.parent?.parent || program;
@@ -38,6 +39,11 @@ function registerSendCommands(program) {
         language: opts.language,
         params: tryParseJson(opts.params)
       });
+      // best-effort local analytics tagging
+      try {
+        const { appendMemory } = require("../lib/memory");
+        await appendMemory(cfg.activeClient || "default", { type: "outbound_sent", kind: "template", to, category: opts.category });
+      } catch {}
       if (json) {
         // eslint-disable-next-line no-console
         console.log(JSON.stringify({ ok: true, data }, null, 2));
@@ -51,6 +57,7 @@ function registerSendCommands(program) {
     .description("send a text message (session/outbound rules apply)")
     .argument("<to_number>", "E.164 without + (example: 9198xxxxxx)")
     .requiredOption("--body <text>", "text body")
+    .option("--category <utility|marketing>", "category tag for local analytics (does not affect Meta)", "utility")
     .option("--preview-url", "enable URL previews", false)
     .action(async (to, opts, cmd) => {
       const root = cmd.parent?.parent || program;
@@ -65,6 +72,10 @@ function registerSendCommands(program) {
       });
       logger.warn("Costs: per-message billed (India approx: ~₹0.11 utility, ~₹0.78 marketing; verify current rates in Meta).");
       const data = await api.sendText({ to, body: opts.body, previewUrl: !!opts.previewUrl });
+      try {
+        const { appendMemory } = require("../lib/memory");
+        await appendMemory(cfg.activeClient || "default", { type: "outbound_sent", kind: "text", to, category: opts.category });
+      } catch {}
       if (json) {
         // eslint-disable-next-line no-console
         console.log(JSON.stringify({ ok: true, data }, null, 2));

@@ -1,5 +1,6 @@
 const { runAgent } = require("../lib/agent/agent");
 const { logger } = require("../lib/logger");
+const { getConfig } = require("../lib/config");
 
 function inferClient(prompt) {
   const p = String(prompt || "");
@@ -26,7 +27,8 @@ function registerAgentCommands(program) {
       const root = cmd.parent?.parent || program;
       const { json, memory } = root.opts();
       const prompt = Array.isArray(promptParts) ? promptParts.join(" ") : String(promptParts);
-      const client = opts.client || inferClient(prompt) || "default";
+      const cfg = await getConfig();
+      const client = opts.client || inferClient(prompt) || cfg.activeClient || "default";
 
       const res = await runAgent(
         {

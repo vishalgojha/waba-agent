@@ -277,26 +277,34 @@ async function startWebhookServer({
           const sessionOpen = in24hWindow(e.timestamp || last, nowIso);
 
           // Build a small tool-only plan.
-          const steps = buildReplyPlan({
-            ctx,
-            clientCfg,
-            from,
-            intent,
-            sessionOpen,
-            textForReply: textForIntent,
-            replyOverride
-          }).filter(Boolean);
+        const steps = buildReplyPlan({
+          ctx,
+          clientCfg,
+          from,
+          intent,
+          sessionOpen,
+          textForReply: textForIntent,
+          replyOverride
+        }).filter(Boolean);
 
-          if (!allowOutbound) {
+        if (!allowOutbound) {
             // Remove outbound steps; still show plan via executor.
             const filtered = steps.filter((s) => s.tool !== "message.send_text" && s.tool !== "template.send");
             logger.warn("Outbound is disabled. Re-run with --allow-outbound to actually reply.");
             await executePlan(ctx, { steps: filtered, risk: "low" }, { yes: true, allowHighRisk: false, json: false });
-            continue;
-          }
+          continue;
+        }
 
-          const hasOutbound = steps.some((s) => s.tool === "message.send_text" || s.tool === "template.send");
-          const overallRisk = hasOutbound ? "high" : "low";
+        // Tag cost category for auto-replies as utility by default.
+        // (For marketing broadcasts, use campaign tooling instead.)
+        for (const s of steps) {
+          if (s.tool === "message.send_text" || s.tool === "template.send") {
+            s.args = { ...(s.args || {}), category: s.args?.category || "utility" };
+          }
+        }
+
+        const hasOutbound = steps.some((s) => s.tool === "message.send_text" || s.tool === "template.send");
+        const overallRisk = hasOutbound ? "high" : "low";
 
           // Execute with confirmations. Even with --yes, high-risk steps should prompt unless allowHighRisk is set.
           await executePlan(ctx, { steps, risk: overallRisk }, { yes: true, allowHighRisk: false, json: false });

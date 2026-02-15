@@ -13,15 +13,25 @@ function registerAuthCommands(program) {
     .requiredOption("--token <token>", "permanent access token")
     .requiredOption("--phone-id <id>", "phone number ID")
     .requiredOption("--business-id <id>", "WABA (WhatsApp Business Account) ID")
+    .option("--client <name>", "client name (default: active client or 'default')")
     .option("--graph-version <ver>", `Graph API version (default: ${getDefaultGraphVersion()})`)
     .option("--base-url <url>", "Graph base URL (default: https://graph.facebook.com)")
     .action(async (opts) => {
+      const prev = await getConfig();
+      const client = opts.client || prev.activeClient || "default";
       const patch = {
-        token: opts.token,
-        phoneNumberId: opts.phoneId,
-        wabaId: opts.businessId,
         graphVersion: opts.graphVersion || getDefaultGraphVersion(),
-        baseUrl: opts.baseUrl
+        baseUrl: opts.baseUrl,
+        activeClient: client,
+        clients: {
+          ...(prev.clients || {}),
+          [client]: {
+            ...(prev.clients?.[client] || {}),
+            token: opts.token,
+            phoneNumberId: opts.phoneId,
+            wabaId: opts.businessId
+          }
+        }
       };
       const { path } = await setConfig(patch);
       logger.ok(`Saved auth to ${path}`);
@@ -57,4 +67,3 @@ function registerAuthCommands(program) {
 }
 
 module.exports = { registerAuthCommands };
-

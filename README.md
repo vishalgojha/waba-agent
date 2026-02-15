@@ -86,6 +86,12 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba agent run`
 - `waba memory list|show|forget`
 - `waba schedule add-text|list|cancel|run`
+- `waba clients add|list|switch|billing`
+- `waba analytics start`
+- `waba metrics --client acme --days 30`
+- `waba integrate google-sheets`
+- `waba sync leads --to sheets`
+- `waba cost estimate|actual`
 
 Global flags:
 
@@ -168,6 +174,28 @@ Safety defaults:
 
 - No outbound replies unless you pass `--allow-outbound`.
 - Even with `--allow-outbound`, outbound steps require terminal confirmation (high-risk).
+
+## Google Sheets Sync (Fastest CRM Upsell)
+
+1) Print Apps Script template:
+
+```bash
+waba integrate google-sheets --print-apps-script
+```
+
+2) Deploy it as a Web App and copy the URL.
+
+3) Configure + test:
+
+```bash
+waba integrate google-sheets --client acme --apps-script-url "<WEB_APP_URL>" --test
+```
+
+4) Sync leads:
+
+```bash
+waba sync leads --to sheets --client acme --days 30
+```
 
 Security notes:
 

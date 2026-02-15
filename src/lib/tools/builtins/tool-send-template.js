@@ -19,6 +19,7 @@ function toolSendTemplate() {
         templateName,
         language,
         params,
+        category: args?.category || null,
         res
       });
       return { ok: true, res };

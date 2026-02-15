@@ -15,6 +15,7 @@ function toolSendText() {
         kind: "text",
         to,
         body,
+        category: args?.category || null,
         res
       });
       return { ok: true, res };

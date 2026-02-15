@@ -82,6 +82,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba auth login|status|logout`
 - `waba webhook setup|start|serve|validate|test`
 - `waba template list`
+- `waba template create|preview|submit-for-approval|analytics|drafts`
 - `waba send template|text`
 - `waba agent run`
 - `waba memory list|show|forget`
@@ -149,6 +150,7 @@ waba-agent/
     redact.js
     report.js
     schedule-store.js
+    template-drafts.js
     tools.js
     tools/ (registry + builtins)
     webhook/ (server + signature + parse + payloads)
@@ -265,6 +267,27 @@ setx WABA_SMTP_PASS "app-password"
 setx WABA_SMTP_FROM "Reports <you@gmail.com>"
 
 waba report weekly --client acme --email client@acme.com
+```
+
+## Template Management (Business Critical)
+
+Create a template (submits to Meta for approval):
+
+```bash
+waba template create --name "followup_1" --category MARKETING --language en_US --body "Hi {{1}}, quick follow up: are you still interested?"
+```
+
+Preview (local render of {{1}}, {{2}} placeholders):
+
+```bash
+waba template preview --name "followup_1" --params "[\"John\"]"
+```
+
+Local drafts (for fast client customization):
+
+```bash
+waba template create --name "followup_1" --category MARKETING --language en_US --body "Hi {{1}}..." --save-draft
+waba template drafts
 ```
 
 Security notes:

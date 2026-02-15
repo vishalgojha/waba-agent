@@ -90,6 +90,39 @@ class WhatsAppCloudApi {
     }
   }
 
+  async createTemplate({ name, language, category, components, parameterFormat } = {}) {
+    if (!this.wabaId) throw new Error("Missing business (WABA) ID. Set via `waba auth login --business-id ...`.");
+    if (!name) throw new Error("Missing template name.");
+    if (!language) throw new Error("Missing template language (example: en_US).");
+    if (!category) throw new Error("Missing template category (MARKETING|UTILITY|AUTHENTICATION).");
+    if (!Array.isArray(components) || !components.length) throw new Error("Missing template components (BODY required).");
+
+    try {
+      const payload = {
+        name,
+        language,
+        category,
+        ...(parameterFormat ? { parameter_format: parameterFormat } : {}),
+        components
+      };
+      const res = await this.http.post(`/${this.wabaId}/message_templates`, payload);
+      return res.data;
+    } catch (err) {
+      const { details, hint } = toGraphError(err);
+      const e = new Error(`${details.message}${hint ? `\nHint: ${hint}` : ""}`);
+      e.details = details;
+      throw e;
+    }
+  }
+
+  async getTemplateByName({ name, limit = 200 } = {}) {
+    const list = await this.listTemplates({ limit });
+    const rows = list?.data || [];
+    const n = String(name || "").trim();
+    if (!n) return null;
+    return rows.find((r) => r.name === n) || null;
+  }
+
   async sendTemplate({ to, templateName, language = "en", params }) {
     if (!this.phoneNumberId) throw new Error("Missing phone number ID. Set via `waba auth login --phone-id ...`.");
     try {
@@ -180,4 +213,3 @@ class WhatsAppCloudApi {
 }
 
 module.exports = { WhatsAppCloudApi };
-

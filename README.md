@@ -349,6 +349,13 @@ Add a custom question:
 waba flow add-step --client acme --flow lead-qualification --type question --field preferred_time --text "What time works best for you?"
 ```
 
+Add a condition + handoff (example):
+
+```bash
+waba flow add-step --client acme --flow lead-qualification --type condition --if "budget >= 10L" --then-step 8 --else-step 9
+waba flow add-step --client acme --flow lead-qualification --type handoff --reason high_budget --text "Thanks. Our senior advisor will contact you shortly."
+```
+
 Test locally (no WhatsApp send):
 
 ```bash
@@ -359,6 +366,7 @@ Webhook integration:
 
 - `client.json` includes `flows.active` and `flows.intentMap`
 - When enabled, incoming messages advance the flow and the webhook server proposes the next outbound question/reply.
+- Staff notifications: set `handoff.notifyNumber` in `client.json`. The webhook server can notify staff on `flow_end`, `handoff`, `unknown_intent`, or `call_request`.
 
 Security notes:
 

@@ -1,5 +1,6 @@
 const { loadFlow } = require("./flow-store");
 const { getConversation, setConversation } = require("./flow-state");
+const { evalExpr } = require("./flow-expr");
 
 function renderVars(text, vars) {
   let out = String(text || "");
@@ -19,7 +20,8 @@ async function handleInboundWithFlow({ client, from, inboundText, flowName, nowI
   if (!steps.length) return { ok: false, reason: "flow_empty" };
 
   const prev = await getConversation(client, from);
-  const convo = prev && prev.flow === flowName
+  const prevActive = prev && prev.flow === flowName && !prev.completedAt;
+  const convo = prevActive
     ? { ...prev }
     : {
         flow: flowName,
@@ -48,6 +50,18 @@ async function handleInboundWithFlow({ client, from, inboundText, flowName, nowI
     const step = steps[convo.stepIndex];
     if (!step || typeof step !== "object") {
       convo.stepIndex += 1;
+      continue;
+    }
+
+    if (step.type === "condition") {
+      const expr = step.if || step.expr;
+      const ok = evalExpr(expr, { ...(convo.data || {}), _last: text });
+      const thenStep = Number.isFinite(Number(step.thenStepIndex)) ? Number(step.thenStepIndex) : null;
+      const elseStep = Number.isFinite(Number(step.elseStepIndex)) ? Number(step.elseStepIndex) : null;
+      if (ok && thenStep != null) convo.stepIndex = thenStep;
+      else if (!ok && elseStep != null) convo.stepIndex = elseStep;
+      else convo.stepIndex += 1;
+      await setConversation(client, from, convo);
       continue;
     }
 
@@ -80,6 +94,20 @@ async function handleInboundWithFlow({ client, from, inboundText, flowName, nowI
       };
     }
 
+    if (step.type === "handoff") {
+      convo.stepIndex = steps.length;
+      convo.completedAt = nowIso;
+      convo.handoff = { reason: step.reason || "handoff", at: nowIso };
+      await setConversation(client, from, convo);
+      return {
+        ok: true,
+        flow: flowName,
+        action: "handoff",
+        message: step.text ? { type: "text", body: renderVars(step.text, convo.data) } : null,
+        state: convo
+      };
+    }
+
     if (step.type === "end") {
       convo.stepIndex = steps.length;
       convo.completedAt = nowIso;
@@ -102,4 +130,3 @@ async function handleInboundWithFlow({ client, from, inboundText, flowName, nowI
 }
 
 module.exports = { handleInboundWithFlow };
-

@@ -51,9 +51,13 @@ function registerFlowCommands(program) {
   f.command("add-step")
     .description("add a step to a flow")
     .requiredOption("--flow <name>", "flow name")
-    .requiredOption("--type <question|reply|end>", "step type")
+    .requiredOption("--type <question|reply|end|handoff|condition>", "step type")
     .option("--text <text>", "text body")
     .option("--field <name>", "field name (for question step)")
+    .option("--if <expr>", "condition expression (for condition step). Example: budget >= 10L")
+    .option("--then-step <n>", "then jump to this step number (1-based)", (v) => Number(v))
+    .option("--else-step <n>", "else jump to this step number (1-based)", (v) => Number(v))
+    .option("--reason <text>", "handoff reason tag")
     .option("--client <name>", "client name (default: active client)")
     .action(async (opts, cmd) => {
       const root = cmd.parent?.parent || program;
@@ -75,8 +79,20 @@ function registerFlowCommands(program) {
         step.field = opts.field;
         if (!opts.text) step.text = `Please share ${opts.field}.`;
       }
-      if (opts.type === "reply" || opts.type === "end") {
+      if (opts.type === "reply" || opts.type === "end" || opts.type === "handoff") {
         if (!opts.text) throw new Error("--text is required for reply/end steps.");
+      }
+      if (opts.type === "handoff") {
+        if (opts.reason) step.reason = opts.reason;
+      }
+      if (opts.type === "condition") {
+        if (!opts.if) throw new Error("--if is required for condition steps.");
+        step.if = opts.if;
+        if (Number.isFinite(opts.thenStep)) step.thenStepIndex = Math.max(0, opts.thenStep - 1);
+        if (Number.isFinite(opts.elseStep)) step.elseStepIndex = Math.max(0, opts.elseStep - 1);
+        if (step.thenStepIndex === undefined && step.elseStepIndex === undefined) {
+          throw new Error("condition step requires --then-step and/or --else-step.");
+        }
       }
 
       flow.steps = Array.isArray(flow.steps) ? flow.steps : [];
@@ -144,4 +160,3 @@ function registerFlowCommands(program) {
 }
 
 module.exports = { registerFlowCommands };
-

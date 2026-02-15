@@ -132,6 +132,33 @@ function isOptoutText(text) {
   return false;
 }
 
+function isCallRequestText(text) {
+  const t = String(text || "").trim().toLowerCase();
+  if (!t) return false;
+  if (/\b(call\s*me|call\s*back|callback|please\s*call|ring\s*me)\b/.test(t)) return true;
+  if (/\b(phone\s*call|talk\s*to\s*you|speak\s*to)\b/.test(t)) return true;
+  return false;
+}
+
+function shouldNotify(clientCfg, event) {
+  const notifyNumber = clientCfg?.handoff?.notifyNumber;
+  if (!notifyNumber) return { ok: false, reason: "missing_notify_number" };
+  const list = clientCfg?.handoff?.notifyOn;
+  const allow = Array.isArray(list) ? list : ["flow_end", "handoff", "unknown_intent", "call_request"];
+  return { ok: allow.includes(event), notifyNumber };
+}
+
+function buildStaffNotifyText({ client, from, intent, fields, text, reason }) {
+  const lines = [
+    `[${client}] Lead ${reason || "update"}`,
+    `From: ${from}`,
+    `Intent: ${intent || "unknown"}`,
+    fields ? `Fields: ${JSON.stringify(fields)}` : null,
+    text ? `Last: ${String(text).slice(0, 220)}` : null
+  ].filter(Boolean);
+  return lines.join("\n");
+}
+
 async function startWebhookServer({
   host = "127.0.0.1",
   port = 3000,
@@ -261,7 +288,8 @@ async function startWebhookServer({
           await ctx.appendMemory(ctx.client, { type: "inbound_message", from, ts: e.timestamp, msgType: e.type, text: e.text, interactive: e.interactive });
 
           const clientCfg = await readClientConfig(ctx.client);
-          let intent = ruleBasedIntent(textForIntent || "").intent;
+          const rb = ruleBasedIntent(textForIntent || "");
+          let intent = rb.intent;
           let replyOverride = null;
 
           // Compliance: auto-opt-out on STOP/UNSUBSCRIBE.
@@ -273,6 +301,8 @@ async function startWebhookServer({
             // Do not auto-reply; outbound from server requires interactive confirmation.
             continue;
           }
+
+          const callRequest = isCallRequestText(textForIntent);
 
           if (llm && ctx.config?.openaiApiKey && textForIntent) {
             try {
@@ -299,7 +329,20 @@ async function startWebhookServer({
 
           let steps = null;
           let flowRes = null;
-          if (flowName) {
+          if (callRequest) {
+            // Force human handoff.
+            flowRes = {
+              ok: true,
+              flow: flowName,
+              action: "handoff",
+              message: { type: "text", body: "Sure. Our team will call you shortly. Please share your preferred time." },
+              state: { data: null }
+            };
+            steps = [
+              { tool: "memory.note", args: { client: ctx.client, text: `Call request from=${redactPhone(from)} intent=${intent}` }, reason: "Escalate to human." },
+              { tool: "message.send_text", args: { to: from, body: flowRes.message.body, category: "utility" }, reason: "Acknowledge call request." }
+            ];
+          } else if (flowName) {
             flowRes = await handleInboundWithFlow({
               client: ctx.client,
               from,
@@ -342,6 +385,7 @@ async function startWebhookServer({
             const enabled = clientCfg?.integrations?.autoPush?.enabled;
             const shouldAuto = enabled === undefined ? hasAnyCrm(clientCfg?.integrations) : !!enabled;
             const flowCompleted = flowRes?.action === "end";
+            const handoffCompleted = flowRes?.action === "handoff";
             const shouldPush = shouldAuto && (autoMode === "every_inbound" || (autoMode === "flow_end" && flowCompleted));
             if (shouldPush) {
               const lead = {
@@ -360,6 +404,23 @@ async function startWebhookServer({
               await ctx.appendMemory(ctx.client, { type: "crm_push", ok: out.ok, results: out.results, ts: nowIso, event: lead.event, from });
               if (!out.ok) logger.warn(`CRM push failed for ${redactPhone(from)}`);
             }
+            // Always push handoff if integrations exist.
+            if (shouldAuto && handoffCompleted) {
+              const lead = {
+                event: "lead_handoff",
+                client: ctx.client,
+                from,
+                phone: from,
+                intent,
+                ts: nowIso,
+                text: textForIntent,
+                flow: flowName || null,
+                fields: flowRes?.state?.data || null,
+                multimodal: { transcript, imageDesc }
+              };
+              const out = await pushLeadToCrm({ client: ctx.client, clientCfg, lead });
+              await ctx.appendMemory(ctx.client, { type: "crm_push", ok: out.ok, results: out.results, ts: nowIso, event: lead.event, from });
+            }
           } catch (err) {
             logger.warn(`CRM push error: ${err?.message || err}`);
           }
@@ -369,12 +430,43 @@ async function startWebhookServer({
             const filtered = steps.filter((s) => s.tool !== "message.send_text" && s.tool !== "template.send");
             logger.warn("Outbound is disabled. Re-run with --allow-outbound to actually reply.");
             await executePlan(ctx, { steps: filtered, risk: "low" }, { yes: true, allowHighRisk: false, json: false });
-          continue;
-        }
+            continue;
+          }
 
-        // Tag cost category for auto-replies as utility by default.
-        // (For marketing broadcasts, use campaign tooling instead.)
-        for (const s of steps) {
+          // Staff notify (WhatsApp) on flow end/handoff/unknown/call request.
+          try {
+            const staffEvent =
+              callRequest ? "call_request" :
+              flowRes?.action === "handoff" ? "handoff" :
+              flowRes?.action === "end" ? "flow_end" :
+              (intent === "unknown") ? "unknown_intent" :
+              null;
+
+            if (staffEvent) {
+              const n = shouldNotify(clientCfg, staffEvent);
+              if (n.ok) {
+                const text = buildStaffNotifyText({
+                  client: ctx.client,
+                  from,
+                  intent,
+                  fields: flowRes?.state?.data || null,
+                  text: textForIntent,
+                  reason: staffEvent
+                });
+                steps.unshift({
+                  tool: "message.send_text",
+                  args: { to: n.notifyNumber, body: text, category: "utility", internal: true },
+                  reason: "Notify staff."
+                });
+              }
+            }
+          } catch (err) {
+            logger.warn(`notify error: ${err?.message || err}`);
+          }
+
+          // Tag cost category for auto-replies as utility by default.
+          // (For marketing broadcasts, use campaign tooling instead.)
+          for (const s of steps) {
           if (s.tool === "message.send_text" || s.tool === "template.send") {
             s.args = { ...(s.args || {}), category: s.args?.category || "utility" };
           }

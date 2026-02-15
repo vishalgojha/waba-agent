@@ -28,6 +28,15 @@ function presetLeadQualification(flowName = "lead-qualification") {
       { id: newStepId(), type: "question", field: "requirement", text: "What are you looking for?" },
       { id: newStepId(), type: "question", field: "location", text: "Which area/location?" },
       { id: newStepId(), type: "question", field: "budget", text: "What is your budget range?" },
+      {
+        id: newStepId(),
+        type: "condition",
+        if: "budget >= 10L",
+        // If high budget, fast-track to handoff (step index points to the handoff step below).
+        thenStepIndex: 6,
+        elseStepIndex: 7
+      },
+      { id: newStepId(), type: "handoff", reason: "high_budget", text: "Thanks {{name}}. Noted. Our senior advisor will contact you shortly." },
       { id: newStepId(), type: "question", field: "timeline", text: "When do you want to proceed?" },
       {
         id: newStepId(),
@@ -90,4 +99,3 @@ module.exports = {
   saveFlow,
   listFlows
 };
-

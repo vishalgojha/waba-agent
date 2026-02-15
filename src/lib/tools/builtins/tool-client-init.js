@@ -59,7 +59,9 @@ function toolClientInit() {
         },
         handoff: {
           mode: "human",
-          notifyNumber: args?.notifyNumber || null
+          notifyNumber: args?.notifyNumber || null,
+          // Events: flow_end, handoff, unknown_intent, call_request
+          notifyOn: ["flow_end", "handoff", "unknown_intent", "call_request"]
         },
         autoReplies: {
           greeting: "Thanks for contacting us. Please share your name and requirement. We'll reply shortly.",

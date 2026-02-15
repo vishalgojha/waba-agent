@@ -77,7 +77,8 @@ class WhatsAppCloudApi {
     try {
       const res = await this.http.get(`/${this.wabaId}/message_templates`, {
         params: {
-          fields: "name,status,language,category,quality_score,components",
+          // Fields vary over time; keep this superset best-effort.
+          fields: "id,name,status,language,category,quality_score,components,rejected_reason,reason,last_updated_time",
           limit
         }
       });

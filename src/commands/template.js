@@ -4,6 +4,39 @@ const { logger } = require("../lib/logger");
 const { saveDraft, loadDraft, listDrafts } = require("../lib/template-drafts");
 const { readMemory } = require("../lib/memory");
 
+function parseDurationMs(s) {
+  const t = String(s || "").trim().toLowerCase();
+  if (!t) return null;
+  const m = t.match(/^(\d+(?:\.\d+)?)(ms|s|m|h)?$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  const u = m[2] || "ms";
+  if (!Number.isFinite(n) || n < 0) return null;
+  if (u === "ms") return Math.floor(n);
+  if (u === "s") return Math.floor(n * 1000);
+  if (u === "m") return Math.floor(n * 60_000);
+  if (u === "h") return Math.floor(n * 3_600_000);
+  return null;
+}
+
+function stableStringify(obj) {
+  const seen = new WeakSet();
+  const sorter = (x) => {
+    if (!x || typeof x !== "object") return x;
+    if (seen.has(x)) return "[Circular]";
+    seen.add(x);
+    if (Array.isArray(x)) return x.map(sorter);
+    const out = {};
+    for (const k of Object.keys(x).sort()) out[k] = sorter(x[k]);
+    return out;
+  };
+  return JSON.stringify(sorter(obj), null, 2);
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 async function createOrSubmitTemplate(opts, { json }) {
   const cfg = await getConfig();
   const client = opts.client || cfg.activeClient || "default";
@@ -92,6 +125,93 @@ function registerTemplateCommands(program) {
       for (const r of rows) {
         logger.info(`${r.name} (${r.language}) - ${r.status} - ${r.category}`);
       }
+    });
+
+  t.command("status")
+    .description("check template status by name")
+    .requiredOption("--name <name>", "template name")
+    .option("--limit <n>", "search limit", (v) => Number(v), 200)
+    .action(async (opts, cmd) => {
+      const root = cmd.parent?.parent || program;
+      const { json } = root.opts();
+      const cfg = await getConfig();
+      const api = new WhatsAppCloudApi({
+        token: cfg.token,
+        phoneNumberId: cfg.phoneNumberId,
+        wabaId: cfg.wabaId,
+        graphVersion: cfg.graphVersion || "v20.0",
+        baseUrl: cfg.baseUrl
+      });
+      const tmpl = await api.getTemplateByName({ name: opts.name, limit: opts.limit });
+      if (!tmpl) throw new Error("Template not found.");
+      const out = {
+        id: tmpl.id || null,
+        name: tmpl.name,
+        language: tmpl.language,
+        category: tmpl.category,
+        status: tmpl.status,
+        quality_score: tmpl.quality_score || null,
+        rejected_reason: tmpl.rejected_reason || tmpl.reason || null,
+        last_updated_time: tmpl.last_updated_time || null
+      };
+      if (json) {
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify({ ok: true, template: out }, null, 2));
+        return;
+      }
+      logger.info(JSON.stringify(out, null, 2));
+    });
+
+  t.command("wait")
+    .description("wait until a template becomes APPROVED or REJECTED (polls Graph)")
+    .requiredOption("--name <name>", "template name")
+    .option("--timeout <dur>", "timeout (example: 20m, 600s). default: 20m", "20m")
+    .option("--interval <dur>", "poll interval (default: 20s)", "20s")
+    .option("--limit <n>", "search limit", (v) => Number(v), 200)
+    .action(async (opts, cmd) => {
+      const root = cmd.parent?.parent || program;
+      const { json } = root.opts();
+      const cfg = await getConfig();
+      const api = new WhatsAppCloudApi({
+        token: cfg.token,
+        phoneNumberId: cfg.phoneNumberId,
+        wabaId: cfg.wabaId,
+        graphVersion: cfg.graphVersion || "v20.0",
+        baseUrl: cfg.baseUrl
+      });
+
+      const timeoutMs = parseDurationMs(opts.timeout);
+      const intervalMs = parseDurationMs(opts.interval);
+      if (!timeoutMs || timeoutMs < 1000) throw new Error("Invalid --timeout. Example: 20m");
+      if (!intervalMs || intervalMs < 1000) throw new Error("Invalid --interval. Example: 20s");
+
+      const start = Date.now();
+      let last = null;
+      while (Date.now() - start < timeoutMs) {
+        const tmpl = await api.getTemplateByName({ name: opts.name, limit: opts.limit });
+        if (!tmpl) throw new Error("Template not found.");
+        last = tmpl;
+        const st = String(tmpl.status || "").toUpperCase();
+        if (!json) logger.info(`status=${st} quality=${tmpl.quality_score || "-"} updated=${tmpl.last_updated_time || "-"}`);
+        if (st === "APPROVED" || st === "REJECTED") break;
+        await sleep(intervalMs);
+      }
+
+      if (!last) throw new Error("No status read.");
+      const out = {
+        name: last.name,
+        status: last.status,
+        rejected_reason: last.rejected_reason || last.reason || null,
+        quality_score: last.quality_score || null
+      };
+
+      if (json) {
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify({ ok: true, template: out }, null, 2));
+        return;
+      }
+      logger.ok(`Final: ${out.status}`);
+      if (out.rejected_reason) logger.warn(`reason: ${out.rejected_reason}`);
     });
 
   t.command("preview")
@@ -252,6 +372,67 @@ function registerTemplateCommands(program) {
         return;
       }
       logger.info(JSON.stringify(out, null, 2));
+    });
+
+  t.command("sync-drafts")
+    .description("compare local template drafts with remote templates (best-effort)")
+    .option("--client <name>", "client name (default: active client)")
+    .option("--limit <n>", "remote search limit", (v) => Number(v), 200)
+    .action(async (opts, cmd) => {
+      const root = cmd.parent?.parent || program;
+      const { json } = root.opts();
+      const cfg = await getConfig();
+      const client = opts.client || cfg.activeClient || "default";
+
+      const api = new WhatsAppCloudApi({
+        token: cfg.token,
+        phoneNumberId: cfg.phoneNumberId,
+        wabaId: cfg.wabaId,
+        graphVersion: cfg.graphVersion || "v20.0",
+        baseUrl: cfg.baseUrl
+      });
+
+      const drafts = await listDrafts(client);
+      const result = [];
+
+      for (const name of drafts) {
+        const draft = await loadDraft(client, name);
+        const remote = await api.getTemplateByName({ name: draft?.name || name, limit: opts.limit });
+
+        const draftNorm = stableStringify({
+          name: draft?.name,
+          language: draft?.language,
+          category: draft?.category,
+          components: draft?.components
+        });
+
+        const remoteNorm = remote
+          ? stableStringify({
+              name: remote?.name,
+              language: remote?.language,
+              category: remote?.category,
+              components: remote?.components
+            })
+          : null;
+
+        result.push({
+          name: draft?.name || name,
+          localDraft: true,
+          remoteExists: !!remote,
+          status: remote?.status || null,
+          matchesRemote: remoteNorm ? draftNorm === remoteNorm : null
+        });
+      }
+
+      if (json) {
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify({ ok: true, client, result }, null, 2));
+        return;
+      }
+      logger.info(`Draft sync (${client}): ${result.length}`);
+      for (const r of result) {
+        logger.info(`${r.name} remote=${r.remoteExists ? "yes" : "no"} status=${r.status || "-"} match=${r.matchesRemote === null ? "-" : r.matchesRemote}`);
+      }
     });
 }
 

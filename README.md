@@ -83,6 +83,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba webhook setup|start|serve|validate|test`
 - `waba template list`
 - `waba template create|preview|submit-for-approval|analytics|drafts`
+- `waba template create|preview|submit-for-approval|status|wait|analytics|drafts|sync-drafts`
 - `waba send template|text`
 - `waba agent run`
 - `waba memory list|show|forget`
@@ -288,6 +289,19 @@ Local drafts (for fast client customization):
 ```bash
 waba template create --name "followup_1" --category MARKETING --language en_US --body "Hi {{1}}..." --save-draft
 waba template drafts
+```
+
+Check status + wait for approval:
+
+```bash
+waba template status --name "followup_1"
+waba template wait --name "followup_1" --timeout 30m --interval 20s
+```
+
+Compare local drafts vs remote templates:
+
+```bash
+waba template sync-drafts --client acme
 ```
 
 Security notes:

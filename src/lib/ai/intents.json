@@ -1,0 +1,44 @@
+{
+  "send_template": {
+    "required": ["phone", "template"],
+    "optional": ["params", "client"],
+    "risk": "high",
+    "description": "Send approved WhatsApp template"
+  },
+  "send_text": {
+    "required": ["phone", "message"],
+    "optional": ["client"],
+    "risk": "high",
+    "description": "Send text message (24hr window only)"
+  },
+  "schedule_text": {
+    "required": ["phone", "message", "datetime", "client"],
+    "optional": [],
+    "risk": "medium",
+    "description": "Schedule text message for later"
+  },
+  "schedule_template": {
+    "required": ["phone", "template", "datetime", "client"],
+    "optional": ["params"],
+    "risk": "medium",
+    "description": "Schedule template for later"
+  },
+  "list_templates": {
+    "required": [],
+    "optional": ["client"],
+    "risk": "low",
+    "description": "List available templates"
+  },
+  "webhook_setup": {
+    "required": ["message"],
+    "optional": [],
+    "risk": "medium",
+    "description": "Generate webhook setup details using a public URL in message"
+  },
+  "show_memory": {
+    "required": ["client"],
+    "optional": [],
+    "risk": "low",
+    "description": "Show recent memory for a client"
+  }
+}

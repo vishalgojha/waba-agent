@@ -92,6 +92,7 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba template list`
 - `waba template create|preview|submit-for-approval|status|wait|analytics|drafts|sync-drafts`
 - `waba send template|text`
+- `waba ai <natural-language-intent>`
 - `waba agent run`
 - `waba memory list|show|forget`
 - `waba schedule add-text|add-template|list|cancel|run`
@@ -128,6 +129,7 @@ waba-agent/
   bin/waba.js
   src/index.js
   src/commands/
+    ai.js
     agent.js
     auth.js
     analytics.js
@@ -146,6 +148,11 @@ waba-agent/
     template.js
     webhook.js
   src/lib/
+    ai/
+      parser.js
+      validator.js
+      executor.js
+      intents.json
     agent/ (planner + executor)
     ai/openai.js
     analytics.js
@@ -173,6 +180,9 @@ waba-agent/
     schedule-store.js
     template-drafts.js
     tools.js
+    ui/
+      confirm.js
+      format.js
     tools/ (registry + builtins)
     webhook/ (server + signature + parse + payloads)
     whatsapp.js
@@ -550,6 +560,26 @@ OpenAI-compatible providers (Groq/OpenRouter) can work by setting:
 ```bash
 setx OPENAI_BASE_URL "https://api.groq.com/openai/v1"
 ```
+
+## Natural Language Command (Experimental)
+
+Use plain English and let `waba` map it to safe internal commands:
+
+```bash
+waba ai "send followup template to Vishal at 919812345678 for ACME with params John"
+waba ai "schedule reminder for acme tomorrow 10am to +919812345678"
+waba ai "list my templates"
+waba ai "show memory for acme client"
+waba ai "send 'Thanks for your inquiry' to 919812345678"
+```
+
+Notes:
+
+- Uses OpenAI-compatible chat completion (`OPENAI_API_KEY`, optional `OPENAI_BASE_URL`, optional `WABA_AI_MODEL`).
+- High-risk outbound actions always require confirmation.
+- If parsing is incomplete, CLI asks for missing fields.
+- If AI parsing fails, it falls back to local heuristic parsing and suggests a manual command.
+- Debug interactions are logged to `~/.waba/ai-interactions.jsonl` (no tokens logged).
 
 ## How To Sell This As A Service (INR 25k-125k setup + retainer)
 

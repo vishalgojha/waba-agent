@@ -26,6 +26,7 @@ const { registerLogsCommands } = require("./commands/logs");
 const { registerLeadsCommands } = require("./commands/leads");
 const { registerExportCommands } = require("./commands/export");
 const { registerAutopilotCommands } = require("./commands/autopilot");
+const { registerAiCommands } = require("./commands/ai");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -76,6 +77,7 @@ async function main() {
   registerLeadsCommands(program);
   registerExportCommands(program);
   registerAutopilotCommands(program);
+  registerAiCommands(program);
 
   program
     .command("doctor")

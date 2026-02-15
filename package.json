@@ -1,6 +1,6 @@
 {
   "name": "@vishalgojha/waba-agent",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI + agent toolkit for WhatsApp Business Cloud API automation (India SMB focused).",
   "license": "MIT",
   "author": "Vishal Gopal Ojha",
@@ -34,7 +34,8 @@
   ],
   "scripts": {
     "start": "node bin/waba.js",
-    "test": "node scripts/smoke.js"
+    "test": "node scripts/smoke.js",
+    "test:ai": "node src/tests/ai.test.js"
   },
   "dependencies": {
     "axios": "^1.7.9",
@@ -45,8 +46,11 @@
     "express": "^4.21.2",
     "figlet": "^1.8.0",
     "fs-extra": "^11.2.0",
+    "ink": "^5.2.1",
+    "ink-text-input": "^6.0.0",
     "ngrok": "^5.0.0-beta.2",
-    "nodemailer": "^6.9.16",
-    "razorpay": "^2.9.6"
+    "nodemailer": "^8.0.1",
+    "razorpay": "^2.9.6",
+    "react": "^18.3.1"
   }
 }

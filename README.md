@@ -59,6 +59,13 @@ This walks non-technical users through setup, chooses safe defaults, and can dir
 waba auth login --token "<PERMANENT_TOKEN>" --phone-id "<PHONE_NUMBER_ID>" --business-id "<WABA_ID>"
 ```
 
+Optional deterministic setup command (single command for client + webhook + AI):
+
+```bash
+waba setup --client acme --token "<PERMANENT_TOKEN>" --phone-id "<PHONE_NUMBER_ID>" --business-id "<WABA_ID>" --generate-verify-token --ai-provider ollama --switch
+waba status --client acme
+```
+
 3) Generate verify token + setup values for Meta
 
 ```bash
@@ -104,6 +111,9 @@ waba chat --client acme-realty --lang en
 ## CLI Commands (Core)
 
 - `waba auth login|status|logout`
+- `waba setup`
+- `waba status`
+- `waba config show|set|unset`
 - `waba webhook setup|start|serve|validate|test`
 - `waba template list`
 - `waba template create|preview|submit-for-approval|status|wait|analytics|drafts|sync-drafts`
@@ -116,7 +126,7 @@ waba chat --client acme-realty --lang en
 - `waba resale activate|import|magic-start|metrics|templates`
 - `waba memory list|show|forget`
 - `waba schedule add-text|add-template|list|cancel|run`
-- `waba clients add|list|switch|billing`
+- `waba clients add|list|switch|remove|billing`
 - `waba analytics start`
 - `waba metrics --client acme --days 30`
 - `waba integrate google-sheets`

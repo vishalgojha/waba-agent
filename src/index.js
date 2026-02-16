@@ -32,6 +32,9 @@ const { registerGatewayCommands } = require("./commands/gateway");
 const { registerHatchCommands } = require("./commands/hatch");
 const { registerResaleCommands } = require("./commands/resale");
 const { registerStartCommands } = require("./commands/start");
+const { registerConfigCommands } = require("./commands/config");
+const { registerSetupCommands } = require("./commands/setup");
+const { registerStatusCommands } = require("./commands/status");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -106,6 +109,9 @@ async function main() {
   registerHatchCommands(program);
   registerResaleCommands(program);
   registerStartCommands(program);
+  registerConfigCommands(program);
+  registerSetupCommands(program);
+  registerStatusCommands(program);
 
   program
     .command("doctor")

@@ -37,6 +37,8 @@
   "scripts": {
     "start": "node bin/waba.js",
     "test": "node scripts/smoke.js",
+    "test:config": "node src/tests/config.test.js",
+    "test:readiness": "node src/tests/readiness.test.js",
     "test:ai": "node src/tests/ai.test.js",
     "test:chat": "node src/tests/chat.test.js",
     "test:gateway": "node src/tests/gateway.test.js",

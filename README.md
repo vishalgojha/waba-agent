@@ -138,6 +138,13 @@ TS TUI shortcuts:
 - `x` on selected `RESULTS` row opens replay confirmation modal.
 - `a` approve, `r` reject, `d` details, `h/?` help toggle.
 
+CI secrets (tenant-only, non-personal):
+
+- `WABA_CI_TOKEN`
+- `WABA_CI_BUSINESS_ID`
+- `WABA_CI_PHONE_NUMBER_ID`
+- optional: `WABA_CI_WEBHOOK_URL`, `WABA_CI_TEST_RECIPIENT`, `WABA_CI_TEST_TEMPLATE`
+
 ## CLI Commands (Core)
 
 - `waba auth login|status|logout`

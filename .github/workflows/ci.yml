@@ -58,20 +58,20 @@ jobs:
           npm run test:ts:spec
 
       - name: Prepare TS doctor strict config
-        if: ${{ secrets.WABA_TS_TOKEN != '' && secrets.WABA_TS_BUSINESS_ID != '' && secrets.WABA_TS_PHONE_NUMBER_ID != '' }}
+        if: ${{ secrets.WABA_CI_TOKEN != '' && secrets.WABA_CI_BUSINESS_ID != '' && secrets.WABA_CI_PHONE_NUMBER_ID != '' }}
         run: |
           mkdir -p "$HOME/.waba-agent"
           cat > "$HOME/.waba-agent/config.json" << 'JSON'
           {
-            "token": "${{ secrets.WABA_TS_TOKEN }}",
-            "businessId": "${{ secrets.WABA_TS_BUSINESS_ID }}",
-            "phoneNumberId": "${{ secrets.WABA_TS_PHONE_NUMBER_ID }}",
-            "webhookUrl": "${{ secrets.WABA_TS_WEBHOOK_URL }}",
-            "testRecipient": "${{ secrets.WABA_TS_TEST_RECIPIENT }}",
-            "testTemplate": "${{ secrets.WABA_TS_TEST_TEMPLATE }}"
+            "token": "${{ secrets.WABA_CI_TOKEN }}",
+            "businessId": "${{ secrets.WABA_CI_BUSINESS_ID }}",
+            "phoneNumberId": "${{ secrets.WABA_CI_PHONE_NUMBER_ID }}",
+            "webhookUrl": "${{ secrets.WABA_CI_WEBHOOK_URL }}",
+            "testRecipient": "${{ secrets.WABA_CI_TEST_RECIPIENT }}",
+            "testTemplate": "${{ secrets.WABA_CI_TEST_TEMPLATE }}"
           }
           JSON
 
       - name: TS doctor strict
-        if: ${{ secrets.WABA_TS_TOKEN != '' && secrets.WABA_TS_BUSINESS_ID != '' && secrets.WABA_TS_PHONE_NUMBER_ID != '' }}
+        if: ${{ secrets.WABA_CI_TOKEN != '' && secrets.WABA_CI_BUSINESS_ID != '' && secrets.WABA_CI_PHONE_NUMBER_ID != '' }}
         run: npm run doctor:ts:strict

@@ -22,3 +22,6 @@ autopilot_*.html
 summary_*.html
 leads_*.csv
 weekly_report_*.html
+
+# local state
+.waba/

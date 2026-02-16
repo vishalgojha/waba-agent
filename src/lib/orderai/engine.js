@@ -5,6 +5,7 @@ const { wabaHome } = require("../paths");
 const { MENU_ITEMS } = require("./menu");
 
 const PROFILE_PATH = path.join(wabaHome(), "orderai-profile.json");
+const PROFILE_FALLBACK_PATH = path.join(process.cwd(), ".waba", "orderai-profile.json");
 const DELIVERY_FEE_ESTIMATE = 39;
 const GST_RATE = 0.05;
 
@@ -654,16 +655,28 @@ class OrderAIEngine {
 }
 
 async function loadOrderProfile() {
-  try {
-    return (await fs.readJson(PROFILE_PATH)) || {};
-  } catch {
-    return {};
+  const paths = [PROFILE_PATH, PROFILE_FALLBACK_PATH];
+  for (const p of paths) {
+    try {
+      return (await fs.readJson(p)) || {};
+    } catch {}
   }
+  return {};
 }
 
 async function saveOrderProfile(profile) {
-  await fs.ensureDir(path.dirname(PROFILE_PATH));
-  await fs.writeJson(PROFILE_PATH, profile || {}, { spaces: 2 });
+  const paths = [PROFILE_PATH, PROFILE_FALLBACK_PATH];
+  let lastErr = null;
+  for (const p of paths) {
+    try {
+      await fs.ensureDir(path.dirname(p));
+      await fs.writeJson(p, profile || {}, { spaces: 2 });
+      return;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error("Unable to save OrderAI profile.");
 }
 
 module.exports = {

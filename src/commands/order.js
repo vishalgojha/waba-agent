@@ -191,7 +191,11 @@ function registerOrderCommands(program) {
       }
 
       if (root.opts().memory !== false) {
-        await saveOrderProfile(engine.profileSnapshot());
+        try {
+          await saveOrderProfile(engine.profileSnapshot());
+        } catch (err) {
+          logger.warn(`Could not persist OrderAI profile: ${err?.message || err}`);
+        }
       }
     });
 }

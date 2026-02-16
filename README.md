@@ -115,6 +115,15 @@ Run the TS control-plane CLI:
 ```bash
 npm run start:ts -- status
 npm run tui:ts
+npm run hatch:ts
+```
+
+Note for Node 24 + Ink/yoga on some Windows setups:
+
+- If `npm run start:ts -- hatch` fails with a `yoga-layout` top-level-await transform error, use:
+
+```bash
+npm run hatch:ts
 ```
 
 Doctor scope mode:

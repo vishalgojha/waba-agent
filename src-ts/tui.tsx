@@ -7,74 +7,75 @@ import { parseIntent } from "./engine/parser.js";
 import { executeIntent } from "./engine/executor.js";
 import { AgenticStateMachine } from "./state-machine.js";
 import type { AgenticState } from "./state-machine.js";
-import type { Intent } from "./types.js";
+import type { ActionResult, Intent } from "./types.js";
 import { loadTuiSession, saveTuiSession } from "./tui-session.js";
-import {
-  buildConfirmLines,
-  buildQueueRows,
-  buildResultRows,
-  panelOrder,
-  type ConfirmState,
-  type PanelKey
-} from "./tui-view-model.js";
+import { buildConfirmLines, panelOrder, type ConfirmState, type PanelKey } from "./tui-view-model.js";
+import { getReplayById } from "./replay.js";
+import { validateIntent } from "./engine/schema.js";
+import { assertReplayIntentHasRequiredPayload } from "./replay-guard.js";
 
 const theme = {
-  accent: "#81A1C1",
-  accentStrong: "#5E81AC",
   text: "#D8DEE9",
   muted: "#4C566A",
+  accent: "#81A1C1",
   ok: "#A3BE8C",
   warn: "#EBCB8B",
   danger: "#BF616A",
   critical: "#B48EAD"
 };
 
-function statusColor(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes("error")) return theme.danger;
-  if (m.includes("reject")) return theme.warn;
-  if (m.includes("executed")) return theme.ok;
-  if (m.includes("critical")) return theme.critical;
-  return theme.accent;
-}
+type TimelineKind = "user" | "plan" | "result" | "error" | "system";
 
-function rowColor(line: string): string {
-  if (line.includes("[C]")) return theme.critical;
-  if (line.includes("[H]")) return theme.danger;
-  if (line.includes("[M]")) return theme.warn;
-  if (line.includes("[L]")) return theme.ok;
-  if (line.toLowerCase().includes("error")) return theme.danger;
-  return theme.text;
-}
-
-function Panel({
-  title,
-  lines,
-  focused,
-  compact = false
-}: {
-  title: string;
+interface TimelineEntry {
+  id: string;
+  kind: TimelineKind;
   lines: string[];
-  focused: boolean;
-  compact?: boolean;
-}) {
+  ts: string;
+}
+
+function riskColor(risk: Intent["risk"]): string {
+  if (risk === "LOW") return theme.ok;
+  if (risk === "MEDIUM") return theme.warn;
+  if (risk === "HIGH") return theme.danger;
+  return theme.critical;
+}
+
+function pushTimeline(
+  setTimeline: React.Dispatch<React.SetStateAction<TimelineEntry[]>>,
+  kind: TimelineKind,
+  lines: string[]
+): void {
+  setTimeline((prev) => [
+    {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      kind,
+      lines,
+      ts: new Date().toISOString().slice(11, 19)
+    },
+    ...prev
+  ]);
+}
+
+function Entry({ item }: { item: TimelineEntry }) {
+  const color =
+    item.kind === "error"
+      ? theme.danger
+      : item.kind === "result"
+        ? theme.ok
+        : item.kind === "plan"
+          ? theme.accent
+          : item.kind === "user"
+            ? theme.text
+            : theme.muted;
+  const prefix =
+    item.kind === "user" ? "you" : item.kind === "plan" ? "plan" : item.kind === "result" ? "result" : item.kind;
   return (
-    <Box
-      flexDirection="column"
-      borderStyle={focused ? "bold" : "round"}
-      borderColor={focused ? theme.accentStrong : theme.muted}
-      paddingX={1}
-      paddingY={0}
-      width={compact ? 32 : 38}
-      minHeight={compact ? 8 : 10}
-      marginRight={1}
-      marginBottom={1}
-    >
-      <Text bold color={focused ? theme.accent : theme.muted}>
-        {title}
+    <Box flexDirection="column" marginBottom={1}>
+      <Text color={theme.muted}>
+        [{item.ts}] {prefix}
       </Text>
-      {(lines.length ? lines : ["-"]).slice(0, compact ? 5 : 8).map((line, i) => (
-        <Text key={`${title}-${i}`} color={rowColor(line)} dimColor={!focused}>
+      {item.lines.map((line, i) => (
+        <Text key={`${item.id}-${i}`} color={color}>
           {line}
         </Text>
       ))}
@@ -86,16 +87,18 @@ function Modal({
   title,
   lines,
   reason,
-  onReason
+  onReason,
+  risk
 }: {
   title: string;
   lines: string[];
   reason: string;
   onReason: (v: string) => void;
+  risk: Intent["risk"];
 }) {
   return (
-    <Box borderStyle="double" borderColor={theme.accentStrong} paddingX={1} marginY={1} flexDirection="column">
-      <Text bold color={theme.accent}>
+    <Box borderStyle="double" borderColor={riskColor(risk)} paddingX={1} marginTop={1} flexDirection="column">
+      <Text bold color={riskColor(risk)}>
         {title}
       </Text>
       {lines.map((line, i) => (
@@ -111,25 +114,55 @@ function Modal({
   );
 }
 
+async function executeReplayById(id: string, dryRun: boolean): Promise<{ lines: string[]; intent?: Intent }> {
+  const cfg = await readConfig();
+  const row = await getReplayById(id);
+  if (!row) throw new Error(`Replay id not found: ${id}`);
+  const replayIntent = row.intent || {
+    action: row.action,
+    business_id: cfg.businessId,
+    phone_number_id: cfg.phoneNumberId,
+    payload: {},
+    risk: row.risk
+  };
+  const intent = validateIntent(replayIntent);
+  assertReplayIntentHasRequiredPayload(intent);
+  if (dryRun) {
+    return {
+      intent,
+      lines: [
+        `dry-run replay id=${id}`,
+        `action=${intent.action} risk=${intent.risk}`,
+        "guard=pass (no execution)"
+      ]
+    };
+  }
+  const out = await executeIntent(intent, cfg);
+  return {
+    lines: [
+      `replayed id=${id} -> action=${out.action}`,
+      `executed id=${out.id}`
+    ]
+  };
+}
+
 function App() {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const machine = useMemo(() => new AgenticStateMachine(), []);
   const [state, setState] = useState<AgenticState>(machine.snapshot());
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [focusedPanel, setFocusedPanel] = useState<PanelKey>("plan");
-  const [showHelp, setShowHelp] = useState(false);
-  const [toast, setToast] = useState<string>("");
-  const [queueSelected, setQueueSelected] = useState(0);
+  const [help, setHelp] = useState(false);
+  const [toast, setToast] = useState("");
   const [resultSelected, setResultSelected] = useState(0);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [confirmSource, setConfirmSource] = useState<"approval" | "rollback">("approval");
+  const [focusedPanel, setFocusedPanel] = useState<PanelKey>("logs");
   const [cfgStatus, setCfgStatus] = useState({ hasToken: false, phone: "(missing)", business: "(missing)" });
-  const [saveTick, setSaveTick] = useState<NodeJS.Timeout | null>(null);
 
-  const compact = (stdout?.columns || 120) < 130;
-  const showSidebar = (stdout?.columns || 120) >= 110;
+  const showRail = (stdout?.columns || 120) >= 110;
 
   useEffect(() => {
     void (async () => {
@@ -138,17 +171,15 @@ function App() {
         setFocusedPanel(saved.focusedPanel);
         setInput(saved.lastPrompt);
       }
+      const cfg = await readConfig();
+      setCfgStatus({
+        hasToken: !!cfg.token,
+        phone: cfg.phoneNumberId || "(missing)",
+        business: cfg.businessId || "(missing)"
+      });
+      pushTimeline(setTimeline, "system", ["chat-first operator console ready"]);
     })();
   }, []);
-
-  useEffect(() => {
-    if (saveTick) clearTimeout(saveTick);
-    const t = setTimeout(() => {
-      void saveTuiSession({ focusedPanel, lastPrompt: input });
-    }, 300);
-    setSaveTick(t);
-    return () => clearTimeout(t);
-  }, [focusedPanel, input]);
 
   useEffect(() => {
     const onUpdate = (next: AgenticState) => setState(next);
@@ -159,19 +190,12 @@ function App() {
   }, [machine]);
 
   useEffect(() => {
-    void (async () => {
-      const cfg = await readConfig();
-      setCfgStatus({
-        hasToken: !!cfg.token,
-        phone: cfg.phoneNumberId || "(missing)",
-        business: cfg.businessId || "(missing)"
-      });
-    })();
-  }, []);
+    void saveTuiSession({ focusedPanel, lastPrompt: input });
+  }, [focusedPanel, input]);
 
   const flash = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(""), 1700);
+    setTimeout(() => setToast(""), 1800);
   };
 
   const cycleFocus = (dir: 1 | -1) => {
@@ -180,22 +204,25 @@ function App() {
     setFocusedPanel(panelOrder[next]);
   };
 
-  const startApprovalModal = (intent: Intent, source: "approval" | "rollback") => {
+  const openConfirm = (intent: Intent, source: "approval" | "rollback") => {
     setConfirmState({ intent, stage: 1, reason: "" });
     setConfirmSource(source);
   };
 
-  const executeApproved = async (intent: Intent) => {
+  const runIntent = async (intent: Intent) => {
     const cfg = await readConfig();
     setBusy(true);
     try {
       const out = await executeIntent(intent, cfg);
       machine.addResult(out);
       machine.pushLog(`Executed ${intent.action} id=${out.id}`);
-      flash(`Executed ${intent.action}`);
+      pushTimeline(setTimeline, "result", [`action=${out.action} risk=${out.risk}`, `id=${out.id}`]);
+      flash(`executed ${out.action}`);
     } catch (err) {
-      machine.pushLog(`Error: ${String((err as Error).message || err)}`);
-      flash("Execution failed");
+      const msg = String((err as Error).message || err);
+      machine.pushLog(`Error: ${msg}`);
+      pushTimeline(setTimeline, "error", [msg]);
+      flash("execution failed");
     } finally {
       setBusy(false);
     }
@@ -204,7 +231,7 @@ function App() {
   useInput(async (ch, key) => {
     if (key.ctrl && ch === "c") {
       if (state.approvals.length || busy || !!confirmState) {
-        flash("Pending work exists. Clear approvals/modal first.");
+        flash("pending actions exist");
         return;
       }
       exit();
@@ -214,37 +241,35 @@ function App() {
     if (confirmState) {
       if (ch === "r") {
         if (confirmSource === "approval") machine.rejectCurrent();
+        pushTimeline(setTimeline, "system", [`rejected ${confirmState.intent.action}`]);
         setConfirmState(null);
-        flash("Approval rejected");
+        flash("rejected");
         return;
       }
       if (key.return) {
         if (confirmState.intent.risk === "MEDIUM") {
+          const intent = confirmState.intent;
           setConfirmState(null);
-          await executeApproved(confirmState.intent);
+          await runIntent(intent);
           return;
         }
         if (confirmState.stage === 1) {
           setConfirmState({ ...confirmState, stage: 2 });
-          flash(confirmState.intent.risk === "CRITICAL" ? "Critical reason required" : "Reason required");
           return;
         }
-
         const reason = confirmState.reason.trim();
         if (confirmState.intent.risk === "HIGH" && reason.length < 6) {
-          flash("Provide a longer reason (min 6 chars)");
+          flash("reason min 6 chars");
           return;
         }
         if (confirmState.intent.risk === "CRITICAL" && !/^APPROVE:\s+.+/i.test(reason)) {
-          flash("Use format: APPROVE: <reason>");
+          flash("use APPROVE: <reason>");
           return;
         }
-        machine.pushLog(`Approved ${confirmState.intent.action} reason="${reason}"`);
+        const intent = confirmState.intent;
+        pushTimeline(setTimeline, "system", [`approved ${intent.action}`, `reason=${reason || "(none)"}`]);
         setConfirmState(null);
-        if (confirmSource === "rollback") {
-          machine.pushLog(`Replay approved for ${confirmState.intent.action}`);
-        }
-        await executeApproved(confirmState.intent);
+        await runIntent(intent);
       }
       return;
     }
@@ -253,189 +278,194 @@ function App() {
       cycleFocus(1);
       return;
     }
-    if (key.leftArrow || key.upArrow) {
-      if (focusedPanel === "queue") {
-        setQueueSelected((v) => Math.max(0, v - 1));
-        return;
-      }
+    if (key.upArrow) {
       if (focusedPanel === "results") {
         setResultSelected((v) => Math.max(0, v - 1));
-        return;
+      } else {
+        cycleFocus(-1);
       }
-      cycleFocus(-1);
       return;
     }
-    if (key.rightArrow || key.downArrow) {
-      if (focusedPanel === "queue") {
-        setQueueSelected((v) => Math.min(Math.max(0, state.queue.length - 1), v + 1));
-        return;
-      }
+    if (key.downArrow) {
       if (focusedPanel === "results") {
         setResultSelected((v) => Math.min(Math.max(0, state.results.length - 1), v + 1));
-        return;
+      } else {
+        cycleFocus(1);
       }
-      cycleFocus(1);
-      return;
-    }
-    if (ch === "?" || ch === "h") {
-      setShowHelp((v) => !v);
       return;
     }
 
-    // While typing prompt, avoid single-key action handlers.
+    if (ch === "?" || ch === "h") {
+      setHelp((v) => !v);
+      return;
+    }
+
     if (input.trim().length > 0) return;
 
-    if (key.return && state.approvals.length) {
-      const approved = machine.approveCurrent();
-      if (!approved) return;
-      startApprovalModal(approved, "approval");
-      return;
-    }
     if (ch === "a") {
       const approved = machine.approveCurrent();
       if (!approved) {
-        flash("No pending approvals");
+        flash("no approvals");
         return;
       }
-      startApprovalModal(approved, "approval");
+      openConfirm(approved, "approval");
       return;
     }
     if (ch === "r") {
       machine.rejectCurrent();
-      flash("Approval rejected");
+      flash("rejected");
       return;
     }
     if (ch === "d") {
-      if (focusedPanel === "results" && state.results[resultSelected]) {
-        machine.pushLog(JSON.stringify(state.results[resultSelected], null, 0));
-        flash("Result details pushed to logs");
-      } else if (state.plan) {
-        machine.pushLog(JSON.stringify(state.plan));
-        flash("Plan details pushed to logs");
+      const selected = state.results[resultSelected] || state.results[0];
+      if (selected) {
+        pushTimeline(setTimeline, "system", [JSON.stringify(selected)]);
+        flash("result details posted");
       }
       return;
     }
-    if (ch === "x" && focusedPanel === "results") {
-      const selected = state.results[resultSelected];
+    if (ch === "x") {
+      const selected = state.results[resultSelected] || state.results[0];
       if (!selected?.intent) {
-        flash("Selected result has no replayable intent");
+        flash("no replayable result");
         return;
       }
-      startApprovalModal(selected.intent, "rollback");
-      flash("Replay confirmation opened");
+      openConfirm(selected.intent, "rollback");
+      flash("replay confirm opened");
+      return;
+    }
+    if (key.return && state.approvals.length) {
+      const approved = machine.approveCurrent();
+      if (approved) openConfirm(approved, "approval");
     }
   });
 
   const onSubmit = async () => {
-    if (!input.trim()) return;
-    const cfg = await readConfig();
-    const intent = parseIntent(input, { businessId: cfg.businessId, phoneNumberId: cfg.phoneNumberId });
-    machine.setPlan(intent);
-    machine.pushLog(`Planned ${intent.action} risk=${intent.risk}`);
+    const text = input.trim();
+    if (!text) return;
     setInput("");
-    setQueueSelected(0);
+    pushTimeline(setTimeline, "user", [text]);
 
-    if (intent.risk === "LOW") {
-      await executeApproved(intent);
+    if (text === "/help") {
+      setHelp(true);
+      return;
+    }
+
+    const replayMatch = /^\/replay\s+([a-f0-9-]{6,})(\s+--dry-run)?$/i.exec(text);
+    if (replayMatch) {
+      const id = replayMatch[1];
+      const dryRun = !!replayMatch[2];
+      try {
+        setBusy(true);
+        const out = await executeReplayById(id, dryRun);
+        if (out.intent && !dryRun) openConfirm(out.intent, "rollback");
+        else pushTimeline(setTimeline, "system", out.lines);
+      } catch (err) {
+        pushTimeline(setTimeline, "error", [String((err as Error).message || err)]);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    try {
+      const cfg = await readConfig();
+      const intent = parseIntent(text, { businessId: cfg.businessId, phoneNumberId: cfg.phoneNumberId });
+      machine.setPlan(intent);
+      machine.pushLog(`Planned ${intent.action} risk=${intent.risk}`);
+      pushTimeline(setTimeline, "plan", [
+        `action=${intent.action}`,
+        `risk=${intent.risk}`,
+        `business=${intent.business_id} phone=${intent.phone_number_id}`
+      ]);
+      if (intent.risk === "LOW") await runIntent(intent);
+    } catch (err) {
+      pushTimeline(setTimeline, "error", [String((err as Error).message || err)]);
     }
   };
 
-  const summary = {
-    approvals: state.approvals.length,
-    results: state.results.length,
-    logs: state.liveLogs.length
-  };
-
-  const navLines = [
-    `PLAN${focusedPanel === "plan" ? " <-" : ""}`,
-    `ACTION_QUEUE${focusedPanel === "queue" ? " <-" : ""}`,
-    `APPROVALS${focusedPanel === "approvals" ? " <-" : ""}`,
-    `LIVE_LOGS${focusedPanel === "logs" ? " <-" : ""}`,
-    `RESULTS${focusedPanel === "results" ? " <-" : ""}`,
-    `ROLLBACK${focusedPanel === "rollback" ? " <-" : ""}`
+  const pending = state.approvals[0];
+  const rightRailLines = [
+    `client token: ${cfgStatus.hasToken ? "set" : "missing"}`,
+    `phone: ${cfgStatus.phone}`,
+    `business: ${cfgStatus.business}`,
+    `pending approvals: ${state.approvals.length}`,
+    `results: ${state.results.length}`,
+    `selected result: ${resultSelected + 1}`
   ];
-
-  const queueRows = buildQueueRows(state.queue, queueSelected);
-  const resultRows = buildResultRows(state.results, resultSelected);
 
   return (
     <Box flexDirection="column" height={stdout?.rows || 40}>
       <Box justifyContent="space-between" borderStyle="single" borderColor={theme.muted} paddingX={1}>
         <Text bold color={theme.accent}>
-          WABA AGENT CONTROL PLANE
+          WABA AGENT CHAT OPS
         </Text>
         <Text color={cfgStatus.hasToken ? theme.ok : theme.warn}>
-          {cfgStatus.hasToken ? "Authenticated" : "Unauthenticated"} | phone={cfgStatus.phone} | business={cfgStatus.business}
+          {cfgStatus.hasToken ? "ready" : "setup needed"} | approvals={state.approvals.length} | mode={focusedPanel}
         </Text>
       </Box>
 
-      <Box flexDirection="row" flexGrow={1}>
-        {showSidebar ? (
-          <Box flexDirection="column" width={compact ? 24 : 30} borderStyle="round" borderColor={theme.muted} paddingX={1} marginRight={1}>
-            <Text bold color={theme.accent}>
-              SECTIONS
-            </Text>
-            {navLines.map((line, i) => (
-              <Text key={`nav-${i}`} color={line.includes("<-") ? theme.accentStrong : theme.text}>
+      <Box flexGrow={1} flexDirection="row">
+        <Box flexDirection="column" flexGrow={1} borderStyle="round" borderColor={theme.muted} paddingX={1} marginRight={showRail ? 1 : 0}>
+          <Text color={theme.muted}>timeline</Text>
+          {timeline.length ? timeline.slice(0, 18).map((item) => <Entry key={item.id} item={item} />) : <Text color={theme.muted}>No events yet.</Text>}
+
+          {pending ? (
+            <Box borderStyle="single" borderColor={riskColor(pending.risk)} paddingX={1} marginTop={1}>
+              <Text color={riskColor(pending.risk)}>
+                pending approval: action={pending.action} risk={pending.risk} (a/Enter approve, r reject)
+              </Text>
+            </Box>
+          ) : null}
+        </Box>
+
+        {showRail ? (
+          <Box flexDirection="column" width={34} borderStyle="round" borderColor={theme.muted} paddingX={1}>
+            <Text color={theme.muted}>context</Text>
+            {rightRailLines.map((line, i) => (
+              <Text key={`rail-${i}`} color={theme.text}>
                 {line}
               </Text>
             ))}
-            <Text color={theme.muted} dimColor>
-              Tab/Arrows focus | Enter approve
-            </Text>
+            <Text color={theme.muted}>shortcuts: a r d x tab h</Text>
+            {state.results[resultSelected] ? (
+              <Box marginTop={1} borderStyle="single" borderColor={theme.muted} paddingX={1} flexDirection="column">
+                <Text color={theme.accent}>selected result</Text>
+                <Text color={theme.text}>action={state.results[resultSelected].action}</Text>
+                <Text color={theme.text}>risk={state.results[resultSelected].risk}</Text>
+                <Text color={theme.text}>id={state.results[resultSelected].id.slice(0, 12)}</Text>
+              </Box>
+            ) : null}
           </Box>
         ) : null}
-
-        <Box flexDirection="column" flexGrow={1}>
-          <Box>
-            <Panel title="PLAN" lines={[state.plan ? JSON.stringify(state.plan) : "No plan"]} focused={focusedPanel === "plan"} compact={compact} />
-            <Panel title="ACTION_QUEUE" lines={queueRows} focused={focusedPanel === "queue"} compact={compact} />
-            <Panel
-              title="APPROVALS"
-              lines={state.approvals.length ? state.approvals.map((x) => `${x.action} [${x.risk}]`) : ["No approvals pending."]}
-              focused={focusedPanel === "approvals"}
-              compact={compact}
-            />
-          </Box>
-          <Box>
-            <Panel title="LIVE_LOGS" lines={state.liveLogs.length ? state.liveLogs : ["No logs"]} focused={focusedPanel === "logs"} compact={compact} />
-            <Panel title="RESULTS" lines={resultRows} focused={focusedPanel === "results"} compact={compact} />
-            <Panel
-              title="ROLLBACK"
-              lines={state.rollback.length ? state.rollback.map((x) => `${x.id.slice(0, 8)} ${x.action}`) : ["No rollback points."]}
-              focused={focusedPanel === "rollback"}
-              compact={compact}
-            />
-          </Box>
-        </Box>
       </Box>
 
       {confirmState ? (
         <Modal
-          title={`APPROVAL ${confirmState.intent.risk}`}
+          title={`approval ${confirmState.intent.risk}`}
           lines={buildConfirmLines(confirmState)}
           reason={confirmState.reason}
           onReason={(v) => setConfirmState((prev) => (prev ? { ...prev, reason: v } : prev))}
+          risk={confirmState.intent.risk}
         />
       ) : null}
 
-      <Box marginTop={0} borderStyle="single" borderColor={theme.muted} paddingX={1}>
-        <Text color={busy ? theme.warn : theme.text}>{busy ? "running... " : ""}Prompt: </Text>
+      <Box borderStyle="single" borderColor={theme.muted} paddingX={1}>
+        <Text color={busy ? theme.warn : theme.text}>{busy ? "running... " : ""}{"> "}</Text>
         <TextInput value={input} onChange={setInput} onSubmit={onSubmit} />
       </Box>
 
-      {showHelp ? (
-        <Box borderStyle="round" borderColor={theme.accentStrong} paddingX={1}>
-          <Text color={theme.accent}>Help:</Text>
-          <Text color={theme.text}> Enter confirm | a approve | r reject | d details | x replay selected result | Tab/Arrows focus | h/? toggle help</Text>
+      {help ? (
+        <Box borderStyle="round" borderColor={theme.accent} paddingX={1}>
+          <Text color={theme.accent}>
+            /help | /replay {"<id>"} --dry-run | /replay {"<id>"} | a approve | r reject | d details | x replay selected result
+          </Text>
         </Box>
       ) : null}
 
-      <Box justifyContent="space-between" borderStyle="single" borderColor={theme.muted} paddingX={1}>
-        <Text color={theme.muted}>
-          approvals={summary.approvals} results={summary.results} logs={summary.logs}
-        </Text>
-        <Text color={toast ? statusColor(toast) : theme.muted}>{toast || "enter=confirm | a=approve | r=reject | d=details | x=replay result | h=help"}</Text>
+      <Box borderStyle="single" borderColor={theme.muted} paddingX={1} justifyContent="space-between">
+        <Text color={theme.muted}>chat-first operator timeline</Text>
+        <Text color={toast ? theme.accent : theme.muted}>{toast || "type a request, or /help"}</Text>
       </Box>
     </Box>
   );

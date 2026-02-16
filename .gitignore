@@ -11,6 +11,8 @@ pnpm-debug.log*
 
 # local npm cache (used occasionally for debugging / offline installs)
 .npm-cache/
+.tmp-ts/
+.waba-runtime/
 
 # generated deploy folders (via `waba deploy render`)
 deploy/

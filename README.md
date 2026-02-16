@@ -138,6 +138,52 @@ TS TUI shortcuts:
 - `x` on selected `RESULTS` row opens replay confirmation modal.
 - `a` approve, `r` reject, `d` details, `h/?` help toggle.
 
+### Running Hatch TUI
+
+Launch chat-first Hatch runtime (with onboarding guard):
+
+```bash
+npm run start:ts -- hatch
+# alias:
+npm run start:ts -- tui
+```
+
+Keybindings:
+
+- `Enter` send/confirm
+- `a` approve
+- `r` reject
+- `e` edit missing slots or approval reason
+- `d` details
+- `/` command palette
+- `x` collapse/expand right rail
+- `?` help
+- `q` or `Ctrl+C` quit
+- `Up/Down` input history
+
+Slash commands:
+
+- `/help`
+- `/doctor`
+- `/status`
+- `/config`
+- `/logs`
+- `/replay <id|latest>`
+- `/ai <intent>`
+
+AI mode providers:
+
+- OpenAI-compatible hosted endpoints via normal env vars (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `WABA_OPENAI_MODEL`)
+- Local Ollama compatible mode
+
+If model is already installed in Ollama, quick local setup:
+
+```bash
+setx OPENAI_BASE_URL "http://127.0.0.1:11434/v1"
+setx OPENAI_API_KEY "ollama"
+setx WABA_OPENAI_MODEL "deepseek-coder-v2:16b"
+```
+
 CI secrets (tenant-only, non-personal):
 
 - `WABA_CI_TOKEN`

@@ -20,6 +20,19 @@ async function requireConfigured() {
   return cfg;
 }
 
+function onboardingHints(): void {
+  logConsole("WARN", "Setup incomplete for Hatch.");
+  logConsole("INFO", "Run: waba-ts onboard");
+  logConsole("INFO", "Then: waba-ts login --token <TOKEN> --business-id <ID> --phone-number-id <ID>");
+}
+
+async function ensureOnboardedForHatch(): Promise<boolean> {
+  const cfg = await readConfig();
+  const ok = !!(cfg.token && cfg.businessId && cfg.phoneNumberId);
+  if (!ok) onboardingHints();
+  return ok;
+}
+
 async function run() {
   const p = new Command();
   p.name("waba-ts").description("WABA Agent TypeScript control plane").option("--json", "json output", false);
@@ -28,6 +41,7 @@ async function run() {
     const cfg = await readConfig();
     logConsole("INFO", `Config loaded. Path is ~/.waba-agent/config.json`);
     logConsole("INFO", `businessId=${cfg.businessId || "(missing)"} phoneNumberId=${cfg.phoneNumberId || "(missing)"}`);
+    if (!cfg.token || !cfg.businessId || !cfg.phoneNumberId) onboardingHints();
   });
 
   p.command("login")
@@ -191,8 +205,15 @@ async function run() {
     });
 
   p.command("tui").description("OpenClaw-style terminal control plane").action(async () => {
-    const { startTui } = await import("./tui.js");
-    startTui();
+    if (!(await ensureOnboardedForHatch())) return;
+    const { startHatchTui } = await import("../src/tui/index.js");
+    startHatchTui();
+  });
+
+  p.command("hatch").description("Alias of tui (chat-first Hatch runtime)").action(async () => {
+    if (!(await ensureOnboardedForHatch())) return;
+    const { startHatchTui } = await import("../src/tui/index.js");
+    startHatchTui();
   });
 
   await p.parseAsync(process.argv);

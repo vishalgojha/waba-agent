@@ -1,0 +1,177 @@
+// src-ts/index.ts
+import { Command } from "commander";
+import fs from "fs-extra";
+import { readConfig, writeConfig, logsPath } from "./config.js";
+import { runDoctor } from "./doctor.js";
+import { MetaClient } from "./meta-client.js";
+import { parseIntent } from "./engine/parser.js";
+import { validateIntent } from "./engine/schema.js";
+import { executeIntent } from "./engine/executor.js";
+import { appendLog, logConsole } from "./logger.js";
+import { getReplayById, listReplay } from "./replay.js";
+import { startTui } from "./tui.js";
+
+async function requireConfigured() {
+  const cfg = await readConfig();
+  if (!cfg.token || !cfg.businessId || !cfg.phoneNumberId) {
+    throw new Error("Missing config. Run: waba-ts login --token ... --business-id ... --phone-number-id ...");
+  }
+  return cfg;
+}
+
+async function run() {
+  const p = new Command();
+  p.name("waba-ts").description("WABA Agent TypeScript control plane").option("--json", "json output", false);
+
+  p.command("onboard").description("bootstrap config hints").action(async () => {
+    const cfg = await readConfig();
+    logConsole("INFO", `Config loaded. Path is ~/.waba-agent/config.json`);
+    logConsole("INFO", `businessId=${cfg.businessId || "(missing)"} phoneNumberId=${cfg.phoneNumberId || "(missing)"}`);
+  });
+
+  p.command("login")
+    .requiredOption("--token <token>")
+    .requiredOption("--business-id <id>")
+    .requiredOption("--phone-number-id <id>")
+    .option("--webhook-url <url>")
+    .option("--verify-token <token>")
+    .option("--test-recipient <phone>")
+    .option("--test-template <name>")
+    .action(async (opts) => {
+      const out = await writeConfig({
+        token: String(opts.token),
+        businessId: String(opts.businessId),
+        phoneNumberId: String(opts.phoneNumberId),
+        webhookUrl: opts.webhookUrl ? String(opts.webhookUrl) : undefined,
+        webhookVerifyToken: opts.verifyToken ? String(opts.verifyToken) : undefined,
+        testRecipient: opts.testRecipient ? String(opts.testRecipient) : undefined,
+        testTemplate: opts.testTemplate ? String(opts.testTemplate) : undefined
+      });
+      logConsole("INFO", `Saved config: ${out}`);
+    });
+
+  p.command("doctor").description("run connectivity and capability checks").action(async () => {
+    const cfg = await requireConfigured();
+    const report = await runDoctor(cfg);
+    await appendLog("INFO", "doctor.report", report as unknown as Record<string, unknown>);
+    if (p.opts().json) console.log(JSON.stringify(report, null, 2));
+    else logConsole("INFO", JSON.stringify(report, null, 2));
+  });
+
+  p.command("status").description("show local setup status").action(async () => {
+    const cfg = await readConfig();
+    const status = {
+      token: cfg.token ? "***set***" : "(missing)",
+      businessId: cfg.businessId || "(missing)",
+      phoneNumberId: cfg.phoneNumberId || "(missing)",
+      webhookUrl: cfg.webhookUrl || "(missing)",
+      logsPath: logsPath()
+    };
+    if (p.opts().json) console.log(JSON.stringify(status, null, 2));
+    else logConsole("INFO", JSON.stringify(status, null, 2));
+  });
+
+  p.command("profile").action(async () => {
+    const cfg = await requireConfigured();
+    const intent = validateIntent({
+      action: "get_profile",
+      business_id: cfg.businessId,
+      phone_number_id: cfg.phoneNumberId,
+      payload: {},
+      risk: "LOW"
+    });
+    const out = await executeIntent(intent, cfg);
+    console.log(JSON.stringify(out.output, null, 2));
+  });
+
+  p.command("numbers").action(async () => {
+    const cfg = await requireConfigured();
+    const intent = validateIntent({
+      action: "list_numbers",
+      business_id: cfg.businessId,
+      phone_number_id: cfg.phoneNumberId,
+      payload: {},
+      risk: "LOW"
+    });
+    const out = await executeIntent(intent, cfg);
+    console.log(JSON.stringify(out.output, null, 2));
+  });
+
+  p.command("templates").description("list templates").action(async () => {
+    const cfg = await requireConfigured();
+    const api = new MetaClient(cfg);
+    const out = await api.listTemplates();
+    console.log(JSON.stringify(out, null, 2));
+  });
+
+  p.command("send")
+    .requiredOption("--to <phone>")
+    .requiredOption("--template <name>")
+    .option("--language <code>", "template language", "en_US")
+    .action(async (opts) => {
+      const cfg = await requireConfigured();
+      const intent = validateIntent({
+        action: "send_template",
+        business_id: cfg.businessId,
+        phone_number_id: cfg.phoneNumberId,
+        payload: {
+          to: String(opts.to),
+          templateName: String(opts.template),
+          language: String(opts.language)
+        },
+        risk: "HIGH"
+      });
+      const out = await executeIntent(intent, cfg);
+      console.log(JSON.stringify(out, null, 2));
+    });
+
+  p.command("logs")
+    .option("--tail <n>", "tail lines", "50")
+    .action(async (opts) => {
+      const lp = logsPath();
+      if (!(await fs.pathExists(lp))) {
+        logConsole("WARN", "No logs yet.");
+        return;
+      }
+      const raw = await fs.readFile(lp, "utf8");
+      const lines = raw.split("\n").filter(Boolean).slice(-Number(opts.tail || 50));
+      for (const line of lines) console.log(line);
+    });
+
+  p.command("replay")
+    .argument("<id>", "replay id")
+    .action(async (id) => {
+      const cfg = await requireConfigured();
+      const row = await getReplayById(String(id));
+      if (!row) throw new Error(`Replay id not found: ${id}`);
+      const replayIntent = row.intent || {
+        action: row.action,
+        business_id: cfg.businessId,
+        phone_number_id: cfg.phoneNumberId,
+        payload: {},
+        risk: row.risk
+      };
+      const intent = validateIntent(replayIntent);
+      const out = await executeIntent(intent, cfg);
+      console.log(JSON.stringify(out, null, 2));
+    });
+
+  p.command("replay-list")
+    .option("--limit <n>", "max rows", "20")
+    .action(async (opts) => {
+      const rows = await listReplay(Number(opts.limit || 20));
+      console.log(JSON.stringify(rows, null, 2));
+    });
+
+  p.command("tui").description("OpenClaw-style terminal control plane").action(() => {
+    startTui();
+  });
+
+  await p.parseAsync(process.argv);
+}
+
+run().catch(async (err) => {
+  await appendLog("ERROR", "cli.error", { message: String((err as Error).message || err) });
+  logConsole("ERROR", String((err as Error).stack || err));
+  process.exitCode = 1;
+});

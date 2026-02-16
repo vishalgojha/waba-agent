@@ -29,6 +29,7 @@
   "files": [
     "bin/",
     "src/",
+    "src-ts/",
     "public/",
     "domain/",
     "LICENSE",
@@ -36,6 +37,9 @@
   ],
   "scripts": {
     "start": "node bin/waba.js",
+    "start:ts": "tsx src-ts/index.ts",
+    "tui:ts": "tsx src-ts/index.ts tui",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node scripts/smoke.js",
     "test:config": "node src/tests/config.test.js",
     "test:readiness": "node src/tests/readiness.test.js",
@@ -67,5 +71,12 @@
     "ora": "^8.2.0",
     "razorpay": "^2.9.6",
     "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^24.3.0",
+    "@types/react": "^18.3.5",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
   }
 }

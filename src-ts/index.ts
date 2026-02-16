@@ -10,6 +10,7 @@ import { executeIntent } from "./engine/executor.js";
 import { appendLog, logConsole } from "./logger.js";
 import { getReplayById, listReplay } from "./replay.js";
 import { startTui } from "./tui.js";
+import { assertReplayIntentHasRequiredPayload } from "./replay-guard.js";
 
 async function requireConfigured() {
   const cfg = await readConfig();
@@ -50,9 +51,16 @@ async function run() {
       logConsole("INFO", `Saved config: ${out}`);
     });
 
-  p.command("doctor").description("run connectivity and capability checks").action(async () => {
+  p.command("doctor")
+    .description("run connectivity and capability checks")
+    .option("--scope-check-mode <mode>", "strict|best-effort", "best-effort")
+    .action(async (opts) => {
     const cfg = await requireConfigured();
-    const report = await runDoctor(cfg);
+    const mode = String(opts.scopeCheckMode || "best-effort").toLowerCase();
+    if (mode !== "strict" && mode !== "best-effort") {
+      throw new Error("Invalid --scope-check-mode. Use strict|best-effort.");
+    }
+    const report = await runDoctor(cfg, { scopeCheckMode: mode });
     await appendLog("INFO", "doctor.report", report as unknown as Record<string, unknown>);
     if (p.opts().json) console.log(JSON.stringify(report, null, 2));
     else logConsole("INFO", JSON.stringify(report, null, 2));
@@ -152,6 +160,7 @@ async function run() {
         risk: row.risk
       };
       const intent = validateIntent(replayIntent);
+      assertReplayIntentHasRequiredPayload(intent);
       const out = await executeIntent(intent, cfg);
       console.log(JSON.stringify(out, null, 2));
     });

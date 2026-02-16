@@ -24,7 +24,9 @@ function runSnapshotChecks(): void {
     ],
     1
   );
-  assert.deepEqual(queueRows, ["  send_template [HIGH]", "> get_profile [LOW]"]);
+  assert.equal(queueRows.length, 2);
+  assert.match(queueRows[0], /^\s{2}--:--\s+send_template\s+\[H\]\sq01$/);
+  assert.match(queueRows[1], /^>\s--:--\s+get_profile\s+\[L\]\sq02$/);
 
   const resultRows = buildResultRows(
     [
@@ -40,7 +42,8 @@ function runSnapshotChecks(): void {
     ],
     0
   );
-  assert.deepEqual(resultRows, ["> get_profile ok=true id=12345678"]);
+  assert.equal(resultRows.length, 1);
+  assert.match(resultRows[0], /^>\s00:00\s+get_profile\s+\[L\]\s12345678$/);
 
   const high: ConfirmState = { intent: sampleIntent, stage: 2, reason: "Need client escalation" };
   assert.deepEqual(buildConfirmLines(high), [
@@ -63,4 +66,3 @@ function runSnapshotChecks(): void {
 
 runSnapshotChecks();
 console.log("tui-view-model snapshots: ok");
-

@@ -21,7 +21,9 @@ async function checkWebhookConnectivity(cfg: AgentConfig): Promise<ScopeCheck> {
   }
 }
 
-export async function runDoctor(cfg: AgentConfig): Promise<DoctorReport> {
+export type ScopeCheckMode = "strict" | "best-effort";
+
+export async function runDoctor(cfg: AgentConfig, { scopeCheckMode = "best-effort" }: { scopeCheckMode?: ScopeCheckMode } = {}): Promise<DoctorReport> {
   const api = new MetaClient(cfg);
 
   let tokenValidity: ScopeCheck = fail("token_validity", "not checked");
@@ -63,7 +65,10 @@ export async function runDoctor(cfg: AgentConfig): Promise<DoctorReport> {
       requiredScopes = ok("required_scopes", `validated scopes: ${need.join(", ")}`);
     }
   } catch (err) {
-    requiredScopes = fail("required_scopes", `unable to verify via debug_token: ${String((err as Error).message || err)}`);
+    const msg = `unable to verify via debug_token: ${String((err as Error).message || err)}`;
+    requiredScopes = scopeCheckMode === "strict"
+      ? fail("required_scopes", msg)
+      : ok("required_scopes", `${msg} (best-effort mode: treated as warning)`);
   }
 
   if (cfg.testRecipient && cfg.testTemplate) {

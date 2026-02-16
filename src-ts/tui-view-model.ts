@@ -11,11 +11,24 @@ export interface ConfirmState {
   reason: string;
 }
 
+function riskBadge(risk: Intent["risk"]): string {
+  if (risk === "LOW") return "L";
+  if (risk === "MEDIUM") return "M";
+  if (risk === "HIGH") return "H";
+  return "C";
+}
+
+function pad(input: string, len: number): string {
+  return input.length >= len ? input.slice(0, len) : `${input}${" ".repeat(len - input.length)}`;
+}
+
 export function buildQueueRows(queue: Intent[], selectedIndex: number): string[] {
   if (!queue.length) return ["No queued actions."];
   return queue.map((item, i) => {
     const marker = i === selectedIndex ? ">" : " ";
-    return `${marker} ${item.action} [${item.risk}]`;
+    const rowId = String(i + 1).padStart(2, "0");
+    const action = pad(item.action, 16);
+    return `${marker} --:-- ${action} [${riskBadge(item.risk)}] q${rowId}`;
   });
 }
 
@@ -23,7 +36,9 @@ export function buildResultRows(results: ActionResult[], selectedIndex: number):
   if (!results.length) return ["No results yet."];
   return results.map((item, i) => {
     const marker = i === selectedIndex ? ">" : " ";
-    return `${marker} ${item.action} ok=${item.ok} id=${item.id.slice(0, 8)}`;
+    const t = String(item.executedAt || "").slice(11, 16) || "--:--";
+    const action = pad(item.action, 16);
+    return `${marker} ${t} ${action} [${riskBadge(item.risk)}] ${item.id.slice(0, 8)}`;
   });
 }
 
@@ -59,4 +74,3 @@ export function buildConfirmLines(state: ConfirmState): string[] {
     "Type APPROVE: <reason> then press Enter."
   ];
 }
-

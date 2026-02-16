@@ -115,6 +115,7 @@ function App() {
   const [queueSelected, setQueueSelected] = useState(0);
   const [resultSelected, setResultSelected] = useState(0);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [confirmSource, setConfirmSource] = useState<"approval" | "rollback">("approval");
   const [cfgStatus, setCfgStatus] = useState({ hasToken: false, phone: "(missing)", business: "(missing)" });
   const [saveTick, setSaveTick] = useState<NodeJS.Timeout | null>(null);
 
@@ -170,8 +171,9 @@ function App() {
     setFocusedPanel(panelOrder[next]);
   };
 
-  const startApprovalModal = (intent: Intent) => {
+  const startApprovalModal = (intent: Intent, source: "approval" | "rollback") => {
     setConfirmState({ intent, stage: 1, reason: "" });
+    setConfirmSource(source);
   };
 
   const executeApproved = async (intent: Intent) => {
@@ -202,7 +204,7 @@ function App() {
 
     if (confirmState) {
       if (ch === "r") {
-        machine.rejectCurrent();
+        if (confirmSource === "approval") machine.rejectCurrent();
         setConfirmState(null);
         flash("Approval rejected");
         return;
@@ -230,6 +232,9 @@ function App() {
         }
         machine.pushLog(`Approved ${confirmState.intent.action} reason="${reason}"`);
         setConfirmState(null);
+        if (confirmSource === "rollback") {
+          machine.pushLog(`Replay approved for ${confirmState.intent.action}`);
+        }
         await executeApproved(confirmState.intent);
       }
       return;
@@ -274,7 +279,7 @@ function App() {
     if (key.return && state.approvals.length) {
       const approved = machine.approveCurrent();
       if (!approved) return;
-      startApprovalModal(approved);
+      startApprovalModal(approved, "approval");
       return;
     }
     if (ch === "a") {
@@ -283,7 +288,7 @@ function App() {
         flash("No pending approvals");
         return;
       }
-      startApprovalModal(approved);
+      startApprovalModal(approved, "approval");
       return;
     }
     if (ch === "r") {
@@ -299,6 +304,16 @@ function App() {
         machine.pushLog(JSON.stringify(state.plan));
         flash("Plan details pushed to logs");
       }
+      return;
+    }
+    if (ch === "x" && focusedPanel === "results") {
+      const selected = state.results[resultSelected];
+      if (!selected?.intent) {
+        flash("Selected result has no replayable intent");
+        return;
+      }
+      startApprovalModal(selected.intent, "rollback");
+      flash("Replay confirmation opened");
     }
   });
 
@@ -341,7 +356,7 @@ function App() {
           WABA AGENT CONTROL PLANE
         </Text>
         <Text color={cfgStatus.hasToken ? theme.ok : theme.warn}>
-          {cfgStatus.hasToken ? "Authenticated" : "Unauthenticated"} • phone={cfgStatus.phone} • business={cfgStatus.business}
+          {cfgStatus.hasToken ? "Authenticated" : "Unauthenticated"} | phone={cfgStatus.phone} | business={cfgStatus.business}
         </Text>
       </Box>
 
@@ -357,7 +372,7 @@ function App() {
               </Text>
             ))}
             <Text color={theme.muted} dimColor>
-              Tab/Arrows focus • Enter approve
+              Tab/Arrows focus | Enter approve
             </Text>
           </Box>
         ) : null}
@@ -403,7 +418,7 @@ function App() {
       {showHelp ? (
         <Box borderStyle="round" borderColor={theme.accentStrong} paddingX={1}>
           <Text color={theme.accent}>Help:</Text>
-          <Text color={theme.text}> Enter confirm • a approve • r reject • d details • Tab/Arrows focus • h/? toggle help</Text>
+          <Text color={theme.text}> Enter confirm | a approve | r reject | d details | x replay selected result | Tab/Arrows focus | h/? toggle help</Text>
         </Box>
       ) : null}
 
@@ -411,7 +426,7 @@ function App() {
         <Text color={theme.muted}>
           approvals={summary.approvals} results={summary.results} logs={summary.logs}
         </Text>
-        <Text color={toast ? statusColor(toast) : theme.muted}>{toast || "enter=confirm • a=approve • r=reject • d=details • h=help"}</Text>
+        <Text color={toast ? statusColor(toast) : theme.muted}>{toast || "enter=confirm | a=approve | r=reject | d=details | x=replay result | h=help"}</Text>
       </Box>
     </Box>
   );
@@ -420,4 +435,3 @@ function App() {
 export function startTui(): void {
   render(<App />);
 }
-

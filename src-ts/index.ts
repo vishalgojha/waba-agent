@@ -11,6 +11,7 @@ import { appendLog, logConsole } from "./logger.js";
 import { getReplayById, listReplay } from "./replay.js";
 import { startTui } from "./tui.js";
 import { assertReplayIntentHasRequiredPayload } from "./replay-guard.js";
+import { shouldFailDoctorGate } from "./doctor-policy.js";
 
 async function requireConfigured() {
   const cfg = await readConfig();
@@ -54,17 +55,21 @@ async function run() {
   p.command("doctor")
     .description("run connectivity and capability checks")
     .option("--scope-check-mode <mode>", "strict|best-effort", "best-effort")
+    .option("--fail-on-warn", "exit non-zero when report overall is WARN", false)
     .action(async (opts) => {
-    const cfg = await requireConfigured();
-    const mode = String(opts.scopeCheckMode || "best-effort").toLowerCase();
-    if (mode !== "strict" && mode !== "best-effort") {
-      throw new Error("Invalid --scope-check-mode. Use strict|best-effort.");
-    }
-    const report = await runDoctor(cfg, { scopeCheckMode: mode });
-    await appendLog("INFO", "doctor.report", report as unknown as Record<string, unknown>);
-    if (p.opts().json) console.log(JSON.stringify(report, null, 2));
-    else logConsole("INFO", JSON.stringify(report, null, 2));
-  });
+      const cfg = await requireConfigured();
+      const mode = String(opts.scopeCheckMode || "best-effort").toLowerCase();
+      if (mode !== "strict" && mode !== "best-effort") {
+        throw new Error("Invalid --scope-check-mode. Use strict|best-effort.");
+      }
+      const report = await runDoctor(cfg, { scopeCheckMode: mode });
+      await appendLog("INFO", "doctor.report", report as unknown as Record<string, unknown>);
+      if (p.opts().json) console.log(JSON.stringify(report, null, 2));
+      else logConsole("INFO", JSON.stringify(report, null, 2));
+      if (shouldFailDoctorGate(report, !!opts.failOnWarn)) {
+        throw new Error(`Doctor gate failed: overall=${report.overall}`);
+      }
+    });
 
   p.command("status").description("show local setup status").action(async () => {
     const cfg = await readConfig();

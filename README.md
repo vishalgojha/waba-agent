@@ -122,6 +122,7 @@ Doctor scope mode:
 ```bash
 npm run start:ts -- doctor --scope-check-mode best-effort
 npm run start:ts -- doctor --scope-check-mode strict --json
+npm run start:ts -- doctor --scope-check-mode strict --fail-on-warn --json
 ```
 
 Replay:

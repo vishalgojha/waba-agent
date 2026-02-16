@@ -1,0 +1,81 @@
+{
+  "domain": "real-estate-resale",
+  "version": "1.0.0",
+  "buckets": [
+    {
+      "id": "recent_0_6",
+      "label": "Recent (<7 days)",
+      "description": "Light qualification nudge for fresh/warm conversations.",
+      "steps": [
+        {
+          "offset_days": 0,
+          "template_name": "resale_instant_welcome_qualify_hi",
+          "language": "hi",
+          "category": "utility"
+        },
+        {
+          "offset_days": 1,
+          "template_name": "resale_day1_followup_hi",
+          "language": "hi",
+          "category": "marketing"
+        },
+        {
+          "offset_days": 3,
+          "template_name": "resale_post_brochure_nudge_hi",
+          "language": "hi",
+          "category": "utility"
+        }
+      ]
+    },
+    {
+      "id": "warm_7_30",
+      "label": "Warm (7-30 days)",
+      "description": "Stronger re-engagement with fresh listing tease.",
+      "steps": [
+        {
+          "offset_days": 0,
+          "template_name": "resale_day1_followup_hi",
+          "language": "hi",
+          "category": "marketing"
+        },
+        {
+          "offset_days": 3,
+          "template_name": "resale_day3_market_update_hi",
+          "language": "hi",
+          "category": "marketing"
+        },
+        {
+          "offset_days": 7,
+          "template_name": "resale_price_drop_alert_hi",
+          "language": "hi",
+          "category": "marketing"
+        }
+      ]
+    },
+    {
+      "id": "older_30_plus",
+      "label": "Older (30+ days)",
+      "description": "Soft reopen with market update then urgency trigger.",
+      "steps": [
+        {
+          "offset_days": 0,
+          "template_name": "resale_reopen_30plus_hi",
+          "language": "hi",
+          "category": "marketing"
+        },
+        {
+          "offset_days": 7,
+          "template_name": "resale_day3_market_update_hi",
+          "language": "hi",
+          "category": "marketing"
+        },
+        {
+          "offset_days": 14,
+          "template_name": "resale_price_drop_alert_hi",
+          "language": "hi",
+          "category": "marketing"
+        }
+      ]
+    }
+  ]
+}

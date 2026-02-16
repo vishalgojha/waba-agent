@@ -1,0 +1,79 @@
+{
+  "version": "1.0.0",
+  "examples": [
+    {
+      "input": "Hi, I am looking for 2 BHK in Wakad under 80L. Need to buy in 2 months.",
+      "language": "en",
+      "intent": "qualification",
+      "memory_extract": {
+        "preferred_bhk": "2 BHK",
+        "preferred_area": "Wakad",
+        "budget_max": 8000000,
+        "timeline_months": 2,
+        "lead_score": "hot"
+      },
+      "actions": [
+        {
+          "tool": "message.send_text_buttons",
+          "params": {
+            "to": "<lead_phone>",
+            "body": "Great, I can share shortlisted resale options in Wakad. Should I send brochure now or schedule a site visit?",
+            "buttons": [
+              { "id": "brochure", "title": "Send Brochure" },
+              { "id": "visit", "title": "Site Visit" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "input": "हां ब्रोशर भेजो और इस वीकेंड विजिट कर सकते हैं",
+      "language": "hi",
+      "intent": "site_visit_interest",
+      "memory_extract": {
+        "last_intent": "site_visit_interest",
+        "lead_score": "hot"
+      },
+      "actions": [
+        {
+          "tool": "template.send",
+          "params": {
+            "to": "<lead_phone>",
+            "templateName": "resale_post_brochure_nudge_hi",
+            "language": "hi",
+            "params": ["<name>", "<area>", "<bhk>"]
+          }
+        },
+        {
+          "tool": "lead.schedule_followup",
+          "params": {
+            "to": "<lead_phone>",
+            "days": 1,
+            "templateName": "resale_site_visit_confirm_hi",
+            "language": "hi"
+          }
+        }
+      ]
+    },
+    {
+      "input": "Can you reduce token amount and share agreement draft?",
+      "language": "en",
+      "intent": "negotiation_interest",
+      "memory_extract": {
+        "last_intent": "negotiation_interest",
+        "lead_score": "hot"
+      },
+      "actions": [
+        {
+          "tool": "lead.escalate_human",
+          "params": {
+            "phone": "<lead_phone>",
+            "reason": "money_or_legal_query",
+            "priority": "high"
+          }
+        }
+      ],
+      "note": "Money/legal request -> explicit approval and human escalation."
+    }
+  ]
+}

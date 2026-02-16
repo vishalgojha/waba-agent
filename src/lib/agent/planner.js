@@ -1,4 +1,4 @@
-const { chatCompletionJson } = require("../ai/openai");
+const { chatCompletionJson, hasAiProviderConfigured } = require("../ai/openai");
 const { readMemory, summarizeForPrompt } = require("../memory");
 
 function maxRisk(risks) {
@@ -88,7 +88,7 @@ async function aiPlan({ prompt, client, webhookUrl, exampleInboundText, tools, c
 
 async function planSteps(ctx, { prompt, client, webhookUrl, exampleInboundText }) {
   const tools = ctx.registry.list();
-  const hasAi = !!ctx.config?.openaiApiKey && !!(ctx.config?.openaiModel || process.env.OPENAI_MODEL);
+  const hasAi = hasAiProviderConfigured(ctx.config || {});
 
   const raw = hasAi
     ? await aiPlan({ prompt, client, webhookUrl, exampleInboundText, tools, config: ctx.config, memoryEnabled: ctx.memoryEnabled })

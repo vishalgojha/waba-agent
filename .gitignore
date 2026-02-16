@@ -9,6 +9,9 @@ pnpm-debug.log*
 # local secrets/config
 .env
 
+# local npm cache (used occasionally for debugging / offline installs)
+.npm-cache/
+
 # generated deploy folders (via `waba deploy render`)
 deploy/
 deploy-*/

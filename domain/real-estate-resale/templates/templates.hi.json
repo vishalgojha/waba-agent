@@ -1,0 +1,77 @@
+{
+  "domain": "real-estate-resale",
+  "language": "hi",
+  "version": "2026.02.16",
+  "templates": [
+    {
+      "name": "resale_instant_welcome_qualify_hi",
+      "summary": "नया इनबाउंड लीड स्वागत + क्वालिफिकेशन",
+      "category": "UTILITY",
+      "body": "नमस्ते {{1}}! आपने {{2}} के बारे में पूछा था। आपका बजट कितना है और कब तक खरीदने का प्लान है?",
+      "quick_replies": ["बजट बताऊं", "कॉल चाहिए", "अभी नहीं"]
+    },
+    {
+      "name": "resale_day1_followup_hi",
+      "summary": "Day-1 stale lead re-engagement",
+      "category": "MARKETING",
+      "body": "हाय {{1}}, आपने {{2}} में {{3}} देखा था। अभी भी इंटरेस्ट है? आपके बजट में नई रीसेल लिस्टिंग आई है।",
+      "quick_replies": ["ब्रोशर भेजो", "साइट विजिट", "इंटरेस्ट नहीं"]
+    },
+    {
+      "name": "resale_day3_market_update_hi",
+      "summary": "मार्केट अपडेट + हल्का नज",
+      "category": "MARKETING",
+      "body": "{{1}} जी, {{2}} रीसेल मार्केट में इस हफ्ते अच्छी डील्स आई हैं। {{3}} में आपकी रेंज के ऑप्शंस भेजूं?",
+      "quick_replies": ["हाँ भेजो", "कॉल करो", "बाद में"]
+    },
+    {
+      "name": "resale_post_brochure_nudge_hi",
+      "summary": "ब्रोशर देखने के बाद follow-up",
+      "category": "UTILITY",
+      "body": "{{1}} जी, ब्रोशर देख लिया? कोई सवाल हो तो बताइए। चाहें तो साइट विजिट भी फिक्स कर देते हैं।",
+      "quick_replies": ["विजिट फिक्स करो", "सवाल है", "थोड़ा समय"]
+    },
+    {
+      "name": "resale_price_drop_alert_hi",
+      "summary": "Urgency / price drop",
+      "category": "MARKETING",
+      "body": "अच्छी खबर! {{2}} में इसी तरह का फ्लैट अभी कम कीमत पर उपलब्ध है। डिटेल भेजूं?",
+      "quick_replies": ["डिटेल भेजो", "कॉल करो", "स्किप"]
+    },
+    {
+      "name": "resale_site_visit_confirm_hi",
+      "summary": "साइट विजिट कन्फर्मेशन + मैप लिंक",
+      "category": "UTILITY",
+      "body": "आपकी साइट विजिट {{2}} को {{3}} पर कन्फर्म है। लोकेशन: {{4}}। रीशेड्यूल चाहिए तो बताइए।",
+      "quick_replies": ["टाइम ठीक है", "रीशेड्यूल", "कॉल चाहिए"]
+    },
+    {
+      "name": "resale_site_visit_reminder_hi",
+      "summary": "साइट विजिट रिमाइंडर",
+      "category": "UTILITY",
+      "body": "रिमाइंडर: आज {{3}} बजे {{2}} का साइट विजिट है। निकलते समय एक मैसेज कर दीजिए।",
+      "quick_replies": ["निकल रहा हूँ", "30 मिनट लेट", "कैंसल"]
+    },
+    {
+      "name": "resale_post_visit_feedback_hi",
+      "summary": "पोस्ट विजिट फीडबैक + नेक्स्ट स्टेप",
+      "category": "UTILITY",
+      "body": "विजिट के लिए धन्यवाद {{1}} जी। प्रॉपर्टी कैसी लगी? नेगोशिएशन या लोन हेल्प चाहिए तो मैं मदद कर सकता हूँ।",
+      "quick_replies": ["नेगोशिएशन", "लोन हेल्प", "और विकल्प"]
+    },
+    {
+      "name": "resale_loan_assist_hi",
+      "summary": "लोन असिस्टेंस संदेश",
+      "category": "UTILITY",
+      "body": "अगर चाहें तो मैं बैंक पार्टनर्स से EMI और eligibility चेक जल्दी करवा सकता हूँ।",
+      "quick_replies": ["Eligibility चेक", "EMI बताओ", "जरूरत नहीं"]
+    },
+    {
+      "name": "resale_reopen_30plus_hi",
+      "summary": "30+ दिन पुराने लीड का soft re-open",
+      "category": "MARKETING",
+      "body": "नमस्ते {{1}} जी, काफी समय हो गया। अगर requirement अभी भी open है तो {{2}} में {{3}} के 2-3 अच्छे रीसेल ऑप्शंस भेज दूं?",
+      "quick_replies": ["ऑप्शंस भेजो", "बाद में कॉल", "क्लोज हो गया"]
+    }
+  ]
+}

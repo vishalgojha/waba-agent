@@ -1,0 +1,77 @@
+{
+  "domain": "real-estate-resale",
+  "language": "en",
+  "version": "2026.02.16",
+  "templates": [
+    {
+      "name": "resale_instant_welcome_qualify_en",
+      "summary": "Instant inbound welcome + qualification",
+      "category": "UTILITY",
+      "body": "Hi {{1}}! You had asked about {{2}}. Could you share your budget and when you plan to buy?",
+      "quick_replies": ["Share Budget", "Need Call", "Not Now"]
+    },
+    {
+      "name": "resale_day1_followup_en",
+      "summary": "Day-1 stale lead re-engagement",
+      "category": "MARKETING",
+      "body": "Hi {{1}}, you had checked {{3}} in {{2}}. Still interested? We have fresh resale options matching your budget.",
+      "quick_replies": ["Send Brochure", "Site Visit", "Not Interested"]
+    },
+    {
+      "name": "resale_day3_market_update_en",
+      "summary": "Market pulse + soft nudge",
+      "category": "MARKETING",
+      "body": "Quick update, {{1}}: resale prices in {{2}} moved this week. Want latest options in {{3}} around your budget?",
+      "quick_replies": ["Yes Share", "Need Call", "Later"]
+    },
+    {
+      "name": "resale_post_brochure_nudge_en",
+      "summary": "Brochure follow-up",
+      "category": "UTILITY",
+      "body": "Hi {{1}}, did you get a chance to review the brochure? I can help shortlist options and schedule a site visit.",
+      "quick_replies": ["Book Visit", "Ask Question", "Need Time"]
+    },
+    {
+      "name": "resale_price_drop_alert_en",
+      "summary": "Urgency / price-drop trigger",
+      "category": "MARKETING",
+      "body": "Good news! Similar unit in {{2}} is available at lower pricing now. Want details before it gets blocked?",
+      "quick_replies": ["Send Details", "Call Me", "Skip"]
+    },
+    {
+      "name": "resale_site_visit_confirm_en",
+      "summary": "Site visit confirmation with maps",
+      "category": "UTILITY",
+      "body": "Your site visit is confirmed for {{2}} at {{3}}. Location: {{4}}. Please reply if you need reschedule.",
+      "quick_replies": ["On Time", "Reschedule", "Need Call"]
+    },
+    {
+      "name": "resale_site_visit_reminder_en",
+      "summary": "Visit reminder",
+      "category": "UTILITY",
+      "body": "Reminder: site visit today at {{3}} for {{2}}. Ping me when you start, I will coordinate.",
+      "quick_replies": ["Starting", "Delay 30m", "Cancel"]
+    },
+    {
+      "name": "resale_post_visit_feedback_en",
+      "summary": "Post-visit feedback + next step",
+      "category": "UTILITY",
+      "body": "Thanks for visiting, {{1}}. How did you like the property? I can help with negotiation or loan assistance.",
+      "quick_replies": ["Negotiate", "Loan Help", "Show More"]
+    },
+    {
+      "name": "resale_loan_assist_en",
+      "summary": "Loan support follow-up",
+      "category": "UTILITY",
+      "body": "If needed, I can connect you with bank partners for quick eligibility checks and EMI estimates.",
+      "quick_replies": ["Check Eligibility", "Share EMI", "Not Needed"]
+    },
+    {
+      "name": "resale_reopen_30plus_en",
+      "summary": "30+ day soft re-open",
+      "category": "MARKETING",
+      "body": "Hi {{1}}, it has been a while. If your requirement is still open, I can share 2-3 resale options in {{2}} matching {{3}}.",
+      "quick_replies": ["Share Options", "Call Later", "Closed"]
+    }
+  ]
+}

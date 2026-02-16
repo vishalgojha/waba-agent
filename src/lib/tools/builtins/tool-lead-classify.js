@@ -1,4 +1,4 @@
-const { chatCompletionJson } = require("../../ai/openai");
+const { chatCompletionJson, hasAiProviderConfigured } = require("../../ai/openai");
 
 function heuristic(text) {
   const t = String(text || "").toLowerCase();
@@ -23,7 +23,7 @@ function toolLeadClassify() {
       const client = args?.client || ctx.client || "default";
       const text = args?.text || "";
       const from = args?.from || null;
-      const useAi = !!ctx.config?.openaiApiKey;
+      const useAi = hasAiProviderConfigured(ctx.config || {});
 
       let result;
       if (!useAi) {

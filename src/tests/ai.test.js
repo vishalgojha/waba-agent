@@ -7,6 +7,7 @@ const { aiParseIntent } = require("../lib/ai/parser");
 const { validateIntent } = require("../lib/ai/validator");
 const { executeIntent } = require("../lib/ai/executor");
 const { parseEditInput, normalizeChoice } = require("../lib/ui/confirm");
+const { resolveAiProviderConfig } = require("../lib/ai/openai");
 const { logger } = require("../lib/logger");
 
 function silenceLogger() {
@@ -73,6 +74,77 @@ test("parser: falls back to heuristic parsing when LLM times out", async () => {
   } finally {
     global.fetch = prevFetch;
     restoreLogger();
+  }
+});
+
+test("parser: supports anthropic provider response format", async () => {
+  const prevFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    assert.match(String(url), /api\.anthropic\.com\/v1\/messages/);
+    assert.equal(opts.headers["x-api-key"], "anth-key");
+    assert.equal(opts.headers["anthropic-version"], "2023-06-01");
+    return {
+      ok: true,
+      text: async () => JSON.stringify({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              action: "list_templates",
+              client: null,
+              phone: null,
+              template: null,
+              params: null,
+              message: null,
+              datetime: null,
+              confidence: 0.8
+            })
+          }
+        ]
+      })
+    };
+  };
+
+  try {
+    const intent = await aiParseIntent("list my templates", {
+      aiProvider: "anthropic",
+      anthropicApiKey: "anth-key",
+      anthropicModel: "claude-3-5-haiku-latest"
+    });
+    assert.equal(intent.action, "list_templates");
+  } finally {
+    global.fetch = prevFetch;
+  }
+});
+
+test("provider resolver: detects openrouter/xai/anthropic from env keys", () => {
+  const prev = {
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    XAI_API_KEY: process.env.XAI_API_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY
+  };
+  try {
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.XAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+
+    process.env.OPENROUTER_API_KEY = "or-key";
+    assert.equal(resolveAiProviderConfig({}).provider, "openrouter");
+    delete process.env.OPENROUTER_API_KEY;
+
+    process.env.XAI_API_KEY = "x-key";
+    assert.equal(resolveAiProviderConfig({}).provider, "xai");
+    delete process.env.XAI_API_KEY;
+
+    process.env.ANTHROPIC_API_KEY = "a-key";
+    assert.equal(resolveAiProviderConfig({}).provider, "anthropic");
+  } finally {
+    process.env.OPENROUTER_API_KEY = prev.OPENROUTER_API_KEY;
+    process.env.XAI_API_KEY = prev.XAI_API_KEY;
+    process.env.ANTHROPIC_API_KEY = prev.ANTHROPIC_API_KEY;
+    process.env.OPENAI_API_KEY = prev.OPENAI_API_KEY;
   }
 });
 

@@ -8,6 +8,7 @@ const customParseFormat = require("dayjs/plugin/customParseFormat");
 const { logger } = require("../logger");
 const { wabaHome } = require("../paths");
 const { safeClientName } = require("../creds");
+const { resolveAiProviderConfig, chatCompletionText } = require("./openai");
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -335,26 +336,12 @@ function normalizeIntent(raw, fallbackText) {
   return out;
 }
 
-function readContentText(choice) {
-  const msg = choice?.message;
-  if (!msg) return "";
-  const c = msg.content;
-  if (typeof c === "string") return c;
-  if (Array.isArray(c)) {
-    return c
-      .map((x) => (typeof x === "string" ? x : x?.text || ""))
-      .filter(Boolean)
-      .join("\n");
-  }
-  return "";
-}
-
 async function callLlmParse(text, config, { timeoutMs = 1_500 } = {}) {
-  const apiKey = process.env.OPENAI_API_KEY || config?.openaiApiKey;
-  if (!apiKey) throw new Error("OPENAI_API_KEY missing.");
-
-  const baseUrl = (process.env.OPENAI_BASE_URL || config?.openaiBaseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
-  const model = process.env.WABA_AI_MODEL || config?.wabaAiModel || config?.openaiModel || "gpt-4o-mini";
+  const runtime = resolveAiProviderConfig(config);
+  if (!runtime.apiKey) {
+    throw new Error("AI key missing. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, XAI_API_KEY, or OPENROUTER_API_KEY.");
+  }
+  const model = process.env.WABA_AI_MODEL || config?.wabaAiModel || runtime.model;
   const nowIst = dayjs().tz(IST_TZ).format("YYYY-MM-DD HH:mm:ss");
 
   const system = [
@@ -375,66 +362,30 @@ async function callLlmParse(text, config, { timeoutMs = 1_500 } = {}) {
     "Prefer E.164 for phone numbers. Use null for missing fields."
   ].join("\n");
 
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), timeoutMs);
   const startedAt = Date.now();
-  try {
-    await appendAiLog({ type: "ai_parse_request", model, text });
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        max_tokens: 350,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: text }
-        ]
-      }),
-      signal: ac.signal
-    });
+  await appendAiLog({ type: "ai_parse_request", provider: runtime.provider, model, text });
+  const out = await chatCompletionText(config, {
+    model,
+    system,
+    user: text,
+    maxTokens: 350,
+    temperature: 0,
+    timeoutMs
+  });
+  const content = out.content;
+  const parsed = extractJson(content);
+  if (!parsed) throw new Error("Model returned non-JSON content.");
 
-    let payload;
-    if (typeof res.text === "function") {
-      const rawBody = await res.text();
-      try {
-        payload = JSON.parse(rawBody);
-      } catch {
-        payload = { raw: rawBody };
-      }
-    } else if (typeof res.json === "function") {
-      payload = await res.json();
-    } else {
-      payload = {};
-    }
-
-    if (!res.ok) {
-      const msg = payload?.error?.message || `${res.status} ${res.statusText}`;
-      const err = new Error(msg);
-      err.status = res.status;
-      throw err;
-    }
-
-    const content = readContentText(payload?.choices?.[0]);
-    const parsed = extractJson(content);
-    if (!parsed) throw new Error("Model returned non-JSON content.");
-
-    await appendAiLog({
-      type: "ai_parse_response",
-      model,
-      latencyMs: Date.now() - startedAt,
-      content,
-      parsed
-    });
-    logger.debug({ aiParse: { model, latencyMs: Date.now() - startedAt } });
-    return parsed;
-  } finally {
-    clearTimeout(timer);
-  }
+  await appendAiLog({
+    type: "ai_parse_response",
+    provider: out.provider,
+    model: out.model,
+    latencyMs: Date.now() - startedAt,
+    content,
+    parsed
+  });
+  logger.debug({ aiParse: { provider: out.provider, model: out.model, latencyMs: Date.now() - startedAt } });
+  return parsed;
 }
 
 async function aiParseIntent(text, config = {}, options = {}) {

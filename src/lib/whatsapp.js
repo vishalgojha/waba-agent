@@ -167,6 +167,39 @@ class WhatsAppCloudApi {
     }
   }
 
+  async sendTextWithButtons({ to, body, buttons }) {
+    if (!this.phoneNumberId) throw new Error("Missing phone number ID. Set via `waba auth login --phone-id ...`.");
+    const list = Array.isArray(buttons) ? buttons.slice(0, 3) : [];
+    if (!list.length) throw new Error("Missing `buttons` (1-3 quick reply buttons required).");
+    try {
+      const payload = {
+        messaging_product: "whatsapp",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: String(body || "") },
+          action: {
+            buttons: list.map((b, i) => ({
+              type: "reply",
+              reply: {
+                id: String(b?.id || `btn_${i + 1}`).slice(0, 256),
+                title: String(b?.title || `Option ${i + 1}`).slice(0, 20)
+              }
+            }))
+          }
+        }
+      };
+      const res = await this.http.post(`/${this.phoneNumberId}/messages`, payload);
+      return res.data;
+    } catch (err) {
+      const { details, hint } = toGraphError(err);
+      const e = new Error(`${details.message}${hint ? `\nHint: ${hint}` : ""}`);
+      e.details = details;
+      throw e;
+    }
+  }
+
   async markRead({ messageId }) {
     if (!this.phoneNumberId) throw new Error("Missing phone number ID.");
     try {

@@ -27,6 +27,10 @@ const { registerLeadsCommands } = require("./commands/leads");
 const { registerExportCommands } = require("./commands/export");
 const { registerAutopilotCommands } = require("./commands/autopilot");
 const { registerAiCommands } = require("./commands/ai");
+const { registerChatCommands } = require("./commands/chat");
+const { registerGatewayCommands } = require("./commands/gateway");
+const { registerResaleCommands } = require("./commands/resale");
+const { registerOrderCommands } = require("./commands/order");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -42,6 +46,10 @@ async function main() {
     .option("--json", "emit machine-readable JSON where supported", false)
     .option("--debug", "verbose logs", false)
     .option("--no-memory", "disable memory writes (useful for privacy-sensitive deployments)");
+
+  // Recovery UX for mistyped/forgotten commands.
+  program.showSuggestionAfterError(true);
+  program.showHelpAfterError(chalk.yellow('\nTip: run "waba help" or try natural language with: waba ai "<intent>"'));
 
   program.hook("preAction", (cmd) => {
     const opts = cmd.opts();
@@ -78,6 +86,10 @@ async function main() {
   registerExportCommands(program);
   registerAutopilotCommands(program);
   registerAiCommands(program);
+  registerChatCommands(program);
+  registerGatewayCommands(program);
+  registerResaleCommands(program);
+  registerOrderCommands(program);
 
   program
     .command("doctor")

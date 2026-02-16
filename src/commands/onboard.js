@@ -82,7 +82,7 @@ function registerOnboardCommands(program) {
     .option("--port <n>", "webhook port (when using --start-webhook)", (v) => Number(v), 3000)
     .option("--path <path>", "webhook path (when using --start-webhook)", "/webhook")
     .option("--verbose", "verbose webhook logs (PII redacted)", false)
-    .option("--llm", "enable LLM classification/suggestions (requires OPENAI_API_KEY)", false)
+    .option("--llm", "enable LLM classification/suggestions (requires any configured AI provider key)", false)
     .option("--allow-outbound", "allow outbound replies from webhook flow (still prompts for confirmation)", false)
     .option("--non-interactive", "do not prompt; only print required steps", false)
     .action(async (opts, cmd) => {

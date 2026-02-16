@@ -89,6 +89,21 @@ async function getConfig() {
   cfg.openaiModel = envOr(cfg.openaiModel, ["WABA_OPENAI_MODEL", "OPENAI_MODEL"]);
   cfg.openaiVisionModel = envOr(cfg.openaiVisionModel, ["WABA_OPENAI_VISION_MODEL"]);
   cfg.openaiTranscribeModel = envOr(cfg.openaiTranscribeModel, ["WABA_OPENAI_TRANSCRIBE_MODEL"]);
+  cfg.aiProvider = envOr(cfg.aiProvider, ["WABA_AI_PROVIDER"]);
+
+  cfg.anthropicApiKey = envOr(cfg.anthropicApiKey, ["ANTHROPIC_API_KEY"]);
+  cfg.anthropicBaseUrl = envOr(cfg.anthropicBaseUrl, ["ANTHROPIC_BASE_URL"]);
+  cfg.anthropicModel = envOr(cfg.anthropicModel, ["WABA_ANTHROPIC_MODEL", "ANTHROPIC_MODEL"]);
+
+  cfg.xaiApiKey = envOr(cfg.xaiApiKey, ["XAI_API_KEY"]);
+  cfg.xaiBaseUrl = envOr(cfg.xaiBaseUrl, ["XAI_BASE_URL"]);
+  cfg.xaiModel = envOr(cfg.xaiModel, ["WABA_XAI_MODEL", "XAI_MODEL"]);
+
+  cfg.openrouterApiKey = envOr(cfg.openrouterApiKey, ["OPENROUTER_API_KEY"]);
+  cfg.openrouterBaseUrl = envOr(cfg.openrouterBaseUrl, ["OPENROUTER_BASE_URL"]);
+  cfg.openrouterModel = envOr(cfg.openrouterModel, ["WABA_OPENROUTER_MODEL", "OPENROUTER_MODEL"]);
+  cfg.openrouterSiteUrl = envOr(cfg.openrouterSiteUrl, ["WABA_OPENROUTER_SITE_URL", "OPENROUTER_SITE_URL"]);
+  cfg.openrouterAppName = envOr(cfg.openrouterAppName, ["WABA_OPENROUTER_APP_NAME", "OPENROUTER_APP_NAME"]);
 
   cfg.pricing = cfg.pricing && typeof cfg.pricing === "object" ? cfg.pricing : {};
   // Rough ballpark defaults (verify current Meta rates).

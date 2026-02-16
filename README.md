@@ -85,6 +85,12 @@ waba send template 9198XXXXXX --template-name "my_template" --language en --para
 waba agent run "handle leads for real estate client" --client "acme-realty" --webhook-url "https://YOUR_PUBLIC_URL"
 ```
 
+8) Conversational chat mode (natural back-and-forth)
+
+```bash
+waba chat --client acme-realty --lang en
+```
+
 ## CLI Commands (Core)
 
 - `waba auth login|status|logout`
@@ -93,7 +99,11 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 - `waba template create|preview|submit-for-approval|status|wait|analytics|drafts|sync-drafts`
 - `waba send template|text`
 - `waba ai <natural-language-intent>`
+- `waba order [request...]`
 - `waba agent run`
+- `waba chat|chat history|chat resume`
+- `waba gateway start`
+- `waba resale activate|import|magic-start|metrics|templates`
 - `waba memory list|show|forget`
 - `waba schedule add-text|add-template|list|cancel|run`
 - `waba clients add|list|switch|billing`
@@ -131,6 +141,8 @@ waba-agent/
   src/commands/
     ai.js
     agent.js
+    chat.js
+    gateway.js
     auth.js
     analytics.js
     autopilot.js
@@ -148,6 +160,15 @@ waba-agent/
     template.js
     webhook.js
   src/lib/
+    chat/
+      session.js
+      context.js
+      agent.js
+      gateway.js
+      prompt.js
+      memory.js
+      scheduler.js
+      lead-handler.js
     ai/
       parser.js
       validator.js
@@ -188,6 +209,7 @@ waba-agent/
     whatsapp.js
   src/server/
     analytics.js
+    gateway.js
     webhook.js
 ```
 
@@ -221,7 +243,7 @@ waba webhook start --port 3000 --ngrok --verbose
 
 Ngrok note: set `NGROK_AUTHTOKEN` in your environment if required by your ngrok account/plan.
 
-If you have `OPENAI_API_KEY` set, you can enable smarter lead classification + suggested replies:
+If any supported AI provider key is set, you can enable smarter lead classification + suggested replies:
 
 ```bash
 waba webhook start --port 3000 --ngrok --verbose --llm
@@ -546,7 +568,7 @@ Meta enforces rate limits (example: ~200 calls/hour per user). `waba-agent` retr
 
 ## AI (Optional)
 
-Enable lead classification, image describe, and voice transcription:
+Enable lead classification, image describe, and voice transcription (OpenAI-compatible endpoint):
 
 ```bash
 setx OPENAI_API_KEY "..."
@@ -555,10 +577,36 @@ setx WABA_OPENAI_VISION_MODEL "gpt-4o-mini"
 setx WABA_OPENAI_TRANSCRIBE_MODEL "gpt-4o-mini-transcribe"
 ```
 
-OpenAI-compatible providers (Groq/OpenRouter) can work by setting:
+Local Ollama (recommended for privacy + 16GB RAM laptops):
 
 ```bash
-setx OPENAI_BASE_URL "https://api.groq.com/openai/v1"
+setx OPENAI_BASE_URL "http://127.0.0.1:11434/v1"
+setx OPENAI_API_KEY "ollama"
+setx WABA_OPENAI_MODEL "llama3.1:8b"
+```
+
+Anthropic:
+
+```bash
+setx WABA_AI_PROVIDER "anthropic"
+setx ANTHROPIC_API_KEY "..."
+setx WABA_ANTHROPIC_MODEL "claude-3-5-haiku-latest"
+```
+
+xAI (Grok):
+
+```bash
+setx WABA_AI_PROVIDER "xai"
+setx XAI_API_KEY "..."
+setx WABA_XAI_MODEL "grok-2-latest"
+```
+
+OpenRouter:
+
+```bash
+setx WABA_AI_PROVIDER "openrouter"
+setx OPENROUTER_API_KEY "..."
+setx WABA_OPENROUTER_MODEL "openai/gpt-4o-mini"
 ```
 
 ## Natural Language Command (Experimental)
@@ -575,11 +623,151 @@ waba ai "send 'Thanks for your inquiry' to 919812345678"
 
 Notes:
 
-- Uses OpenAI-compatible chat completion (`OPENAI_API_KEY`, optional `OPENAI_BASE_URL`, optional `WABA_AI_MODEL`).
+- Supports provider selection via `WABA_AI_PROVIDER` = `openai|anthropic|xai|openrouter`.
+- `waba ai` and `waba chat` use whichever provider is configured.
 - High-risk outbound actions always require confirmation.
 - If parsing is incomplete, CLI asks for missing fields.
 - If AI parsing fails, it falls back to local heuristic parsing and suggests a manual command.
 - Debug interactions are logged to `~/.waba/ai-interactions.jsonl` (no tokens logged).
+
+## Conversational Chat Agent
+
+Start a persistent conversational assistant per client:
+
+```bash
+waba chat --client acme-realty --lang en
+```
+
+Show session history:
+
+```bash
+waba chat history --client acme-realty
+```
+
+Resume last session:
+
+```bash
+waba chat resume --client acme-realty
+```
+
+Inside chat, use natural prompts like:
+
+- `I got 5 new leads from 99acres for ACME`
+- `qualify them`
+- `schedule follow-up tomorrow 10am`
+- `show templates`
+- `Hindi mein reply karo`
+
+Quick chat commands:
+
+- `/help`
+- `/leads`
+- `/schedule`
+- `/status`
+- `/lang hi` or `/lang en`
+- `/exit`
+
+## Localhost Gateway UI
+
+Start a local web control room (stunning UI + chat/action gateway):
+
+```bash
+waba gateway start --host 127.0.0.1 --port 3010 --client acme-realty --lang en
+```
+
+Short forms:
+
+```bash
+waba gw -c acme-realty
+waba gw
+```
+
+Open:
+
+```text
+http://127.0.0.1:3010/
+```
+
+Custom UI override:
+
+- If `public/waba-gateway-ui.html` exists, gateway serves that file at `/`.
+- Fallback order: `public/waba-gateway-ui.html` -> `public/index.html` -> built-in gateway UI.
+
+What it includes:
+
+- Conversational chat panel with suggestions
+- Proposed action queue + one-click execute
+- Session switching and resume
+- Live sidebar metrics (missed leads, inbound volume, response time)
+- High-risk action guardrail toggle
+
+## Real Estate Resale Magic Mode - Setup in <5 min
+
+Purpose:
+
+- Pre-packaged resale automation for India brokers/agencies (2-15 team size)
+- 48-hour wow goal: re-engage stale/warm leads and capture qualification + visit intent
+
+1. Activate resale profile:
+
+```bash
+waba resale activate --client acme-realty
+```
+
+2. Import leads (CSV or paste) and auto-queue nurture:
+
+```bash
+waba resale import --client acme-realty --csv ./resale-leads.csv --magic-start
+```
+
+CSV format:
+
+```text
+name,phone,last_message_date,property_interested,notes
+Vishal,+919812345678,2026-02-01,2 BHK Wakad,Asked for brochure
+```
+
+3. Start gateway:
+
+```bash
+waba gw -c acme-realty
+```
+
+4. Track first 48h outcomes:
+
+```bash
+waba resale metrics --client acme-realty --hours 48
+```
+
+What gets enabled:
+
+- 10 EN + 10 HI resale templates (day-1/day-3/day-7/day-14 + visit and post-visit)
+- Recency-based nurture queues:
+  - `<7 days`: light qualification nudge
+  - `7-30 days`: strong re-engagement + new listing tease
+  - `30+ days`: soft reopen + market update
+- Structured lead memory extraction:
+  - `budget_min`, `budget_max`, `preferred_bhk`, `preferred_area`, `timeline_months`, `last_intent`, `lead_score`
+- Safe action set in resale mode:
+  - `template.send`
+  - `message.send_text_buttons`
+  - `lead.schedule_followup` (1/3/7/14)
+  - `lead.tag`
+  - `lead.escalate_human`
+
+Gateway APIs for Magic Mode:
+
+- `POST /api/resale/magic-mode` (enable/disable)
+- `POST /api/resale/import` (CSV/paste import)
+- `POST /api/resale/magic-start` (queue nurture sequences)
+- `GET /api/resale/metrics` (48h funnel KPIs)
+- `GET /api/resale/leads` (lead store)
+
+Migration/activation script:
+
+```bash
+npm.cmd run resale:activate -- --client acme-realty
+```
 
 ## How To Sell This As A Service (INR 25k-125k setup + retainer)
 

@@ -9,7 +9,6 @@ import { validateIntent } from "./engine/schema.js";
 import { executeIntent } from "./engine/executor.js";
 import { appendLog, logConsole } from "./logger.js";
 import { getReplayById, listReplay } from "./replay.js";
-import { startTui } from "./tui.js";
 import { assertReplayIntentHasRequiredPayload } from "./replay-guard.js";
 import { shouldFailDoctorGate } from "./doctor-policy.js";
 
@@ -191,7 +190,8 @@ async function run() {
       console.log(JSON.stringify(rows, null, 2));
     });
 
-  p.command("tui").description("OpenClaw-style terminal control plane").action(() => {
+  p.command("tui").description("OpenClaw-style terminal control plane").action(async () => {
+    const { startTui } = await import("./tui.js");
     startTui();
   });
 

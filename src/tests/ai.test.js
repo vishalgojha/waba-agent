@@ -7,7 +7,7 @@ const { aiParseIntent } = require("../lib/ai/parser");
 const { validateIntent } = require("../lib/ai/validator");
 const { executeIntent } = require("../lib/ai/executor");
 const { parseEditInput, normalizeChoice } = require("../lib/ui/confirm");
-const { resolveAiProviderConfig } = require("../lib/ai/openai");
+const { resolveAiProviderConfig, chatCompletionText } = require("../lib/ai/openai");
 const { logger } = require("../lib/logger");
 
 function silenceLogger() {
@@ -145,6 +145,97 @@ test("provider resolver: detects openrouter/xai/anthropic from env keys", () => 
     process.env.XAI_API_KEY = prev.XAI_API_KEY;
     process.env.ANTHROPIC_API_KEY = prev.ANTHROPIC_API_KEY;
     process.env.OPENAI_API_KEY = prev.OPENAI_API_KEY;
+  }
+});
+
+test("provider resolver: defaults to local Ollama when no hosted key is available", () => {
+  const prev = {
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    XAI_API_KEY: process.env.XAI_API_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_BASE_URL: process.env.OPENAI_BASE_URL,
+    WABA_OPENAI_MODEL: process.env.WABA_OPENAI_MODEL,
+    OPENAI_MODEL: process.env.OPENAI_MODEL
+  };
+  try {
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.XAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_BASE_URL;
+    delete process.env.WABA_OPENAI_MODEL;
+    delete process.env.OPENAI_MODEL;
+
+    const runtime = resolveAiProviderConfig({});
+    assert.equal(runtime.provider, "openai");
+    assert.equal(runtime.baseUrl, "http://127.0.0.1:11434/v1");
+    assert.equal(runtime.model, "deepseek-coder-v2:16b");
+    assert.equal(runtime.apiKey, "ollama");
+  } finally {
+    process.env.OPENROUTER_API_KEY = prev.OPENROUTER_API_KEY;
+    process.env.XAI_API_KEY = prev.XAI_API_KEY;
+    process.env.ANTHROPIC_API_KEY = prev.ANTHROPIC_API_KEY;
+    process.env.OPENAI_API_KEY = prev.OPENAI_API_KEY;
+    process.env.OPENAI_BASE_URL = prev.OPENAI_BASE_URL;
+    process.env.WABA_OPENAI_MODEL = prev.WABA_OPENAI_MODEL;
+    process.env.OPENAI_MODEL = prev.OPENAI_MODEL;
+  }
+});
+
+test("chat completion: retries with lightweight Ollama fallback model when primary is missing", async () => {
+  const prevFetch = global.fetch;
+  const prev = {
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    XAI_API_KEY: process.env.XAI_API_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_BASE_URL: process.env.OPENAI_BASE_URL,
+    WABA_OPENAI_MODEL: process.env.WABA_OPENAI_MODEL,
+    WABA_OLLAMA_FALLBACK_MODEL: process.env.WABA_OLLAMA_FALLBACK_MODEL
+  };
+
+  const calls = [];
+  global.fetch = async (_url, opts) => {
+    const body = JSON.parse(opts.body);
+    calls.push(body.model);
+    if (body.model === "deepseek-coder-v2:16b") {
+      return {
+        ok: false,
+        status: 400,
+        statusText: "Bad Request",
+        text: async () => JSON.stringify({ error: { message: "model 'deepseek-coder-v2:16b' not found" } })
+      };
+    }
+    return {
+      ok: true,
+      text: async () => JSON.stringify({
+        choices: [{ message: { content: "{\"ok\":true}" } }]
+      })
+    };
+  };
+
+  try {
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.XAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_BASE_URL;
+    process.env.WABA_OPENAI_MODEL = "deepseek-coder-v2:16b";
+    process.env.WABA_OLLAMA_FALLBACK_MODEL = "qwen2.5:7b";
+
+    const out = await chatCompletionText({}, { user: "hello" });
+    assert.equal(out.model, "qwen2.5:7b");
+    assert.deepEqual(calls, ["deepseek-coder-v2:16b", "qwen2.5:7b"]);
+  } finally {
+    global.fetch = prevFetch;
+    process.env.OPENROUTER_API_KEY = prev.OPENROUTER_API_KEY;
+    process.env.XAI_API_KEY = prev.XAI_API_KEY;
+    process.env.ANTHROPIC_API_KEY = prev.ANTHROPIC_API_KEY;
+    process.env.OPENAI_API_KEY = prev.OPENAI_API_KEY;
+    process.env.OPENAI_BASE_URL = prev.OPENAI_BASE_URL;
+    process.env.WABA_OPENAI_MODEL = prev.WABA_OPENAI_MODEL;
+    process.env.WABA_OLLAMA_FALLBACK_MODEL = prev.WABA_OLLAMA_FALLBACK_MODEL;
   }
 });
 

@@ -101,16 +101,19 @@ function registerScheduleCommands(program) {
 
   s.command("list")
     .description("list scheduled messages")
+    .option("--client <name>", "filter by client")
     .action(async (opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json } = root.opts();
-      const list = await readSchedules();
+      const all = await readSchedules();
+      const client = opts.client || null;
+      const list = client ? all.filter((x) => String(x.client || "default") === String(client)) : all;
       if (json) {
         // eslint-disable-next-line no-console
-        console.log(JSON.stringify({ ok: true, list }, null, 2));
+        console.log(JSON.stringify({ ok: true, client, list }, null, 2));
         return;
       }
-      logger.info(`Scheduled: ${list.length}`);
+      logger.info(`Scheduled: ${list.length}${client ? ` (client: ${client})` : ""}`);
       for (const x of list) logger.info(`${x.id} ${x.status} ${x.runAt} -> ${x.to} (${x.kind})`);
     });
 

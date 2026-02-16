@@ -136,18 +136,21 @@ function registerResaleCommands(program) {
 
   r.command("templates")
     .description("show bundled resale template pack")
+    .option("-c, --client <name>", "client name (default: active client)")
     .option("--lang <en|hi>", "template language", "hi")
     .action(async (opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json } = root.opts();
+      const cfg = await getConfig();
+      const client = safeClientName(opts.client || cfg.activeClient || "default");
       const lang = opts.lang === "en" ? "en" : "hi";
       const templates = await loadResaleTemplatePack(lang);
       if (json) {
         // eslint-disable-next-line no-console
-        console.log(JSON.stringify({ ok: true, lang, count: templates.length, templates }, null, 2));
+        console.log(JSON.stringify({ ok: true, client, lang, count: templates.length, templates }, null, 2));
         return;
       }
-      logger.info(`Resale templates (${lang}): ${templates.length}`);
+      logger.info(`Resale templates (${client}, ${lang}): ${templates.length}`);
       for (const t of templates) logger.info(`- ${t.name}: ${t.summary}`);
     });
 }

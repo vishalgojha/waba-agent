@@ -21,6 +21,9 @@ const {
   readLeadStore
 } = require("../lib/domain/real-estate-resale");
 const pkg = require("../../package.json");
+const { initObservability } = require("../lib/observability");
+const { createRateLimitMiddleware, getRequestClientKey } = require("../lib/http-rate-limit");
+const { createExecutionQueue } = require("../lib/queue/execution-queue");
 
 function gatewayHtml(defaultClient, defaultLanguage) {
   const client = String(defaultClient || "default");
@@ -519,11 +522,35 @@ function gatewayHtml(defaultClient, defaultLanguage) {
 }
 
 async function startGatewayServer({ host = "127.0.0.1", port = 3010, client = "default", language = "en" } = {}) {
+  await initObservability({ serviceName: "waba-gateway", serviceVersion: pkg.version });
+
   const cfg = await getConfig();
   const manager = new GatewaySessionManager();
+  const executionQueue = createExecutionQueue({ manager, logger });
   const app = express();
 
+  app.disable("etag");
+  app.use((_req, res, next) => {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+    res.set("Surrogate-Control", "no-store");
+    next();
+  });
   app.use(express.json({ limit: "1mb" }));
+  app.use(
+    createRateLimitMiddleware({
+      windowMs: Math.max(1_000, Number(process.env.WABA_GATEWAY_RATE_WINDOW_MS || 60_000)),
+      max: Math.max(1, Number(process.env.WABA_GATEWAY_RATE_MAX || 180)),
+      keyFn: (req) => getRequestClientKey(req, cfg.activeClient || client || "default"),
+      responseMessage: "gateway_rate_limited",
+      onLimit: (info) => {
+        logger.warn(
+          `gateway rate limit hit key=${info.key} ip=${info.ip} client=${info.client} count=${info.count} max=${info.max}`
+        );
+      }
+    })
+  );
 
   const repoRoot = path.resolve(__dirname, "..", "..");
   const candidateUiPaths = [
@@ -812,12 +839,19 @@ async function startGatewayServer({ host = "127.0.0.1", port = 3010, client = "d
         return;
       }
       const actionId = req.body?.action_id || req.body?.actionId || null;
-      const execution = actionId
-        ? await s.executePendingById(actionId, { allowHighRisk: !!req.body?.allowHighRisk })
-        : await s.executeActions(Array.isArray(req.body?.actions) ? req.body.actions : [], { allowHighRisk: !!req.body?.allowHighRisk });
+      const queued = await executionQueue.execute({
+        sessionId: s.id,
+        client: s.client,
+        language: s.context?.language || s.language || "en",
+        actionId: actionId ? String(actionId) : null,
+        actions: actionId ? [] : (Array.isArray(req.body?.actions) ? req.body.actions : []),
+        allowHighRisk: !!req.body?.allowHighRisk,
+        timeoutMs: Number(req.body?.timeoutMs || process.env.WABA_QUEUE_TIMEOUT_MS || 45_000)
+      });
       res.json({
         ok: true,
-        execution,
+        execution: queued.execution,
+        queue: queued.queue || null,
         pending_actions: s.getPendingActions(),
         session: s.getSnapshot()
       });

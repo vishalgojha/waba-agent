@@ -17,6 +17,9 @@ const { handleInboundWithFlow } = require("../lib/flow-engine");
 const { getClientConfig } = require("../lib/client-config");
 const { hasAnyCrm, pushLeadToCrm } = require("../lib/crm");
 const { getLastInboundAt, in24hWindow } = require("../lib/session-window");
+const { initObservability } = require("../lib/observability");
+const { createRateLimitMiddleware, getRequestClientKey } = require("../lib/http-rate-limit");
+const pkg = require("../../package.json");
 
 function redactPhone(s) {
   const t = String(s || "");
@@ -168,6 +171,8 @@ async function startWebhookServer({
   enableNgrok = false,
   llm = false
 } = {}) {
+  await initObservability({ serviceName: "waba-webhook", serviceVersion: pkg.version });
+
   if (!verifyToken) logger.warn("Missing verify token (WABA_VERIFY_TOKEN or saved config). GET verification may fail.");
 
   const ctx = await createAgentContext({ client, memoryEnabled });
@@ -193,6 +198,17 @@ async function startWebhookServer({
 
   app.use(
     pathName,
+    createRateLimitMiddleware({
+      windowMs: Math.max(1_000, Number(process.env.WABA_WEBHOOK_RATE_WINDOW_MS || 60_000)),
+      max: Math.max(1, Number(process.env.WABA_WEBHOOK_RATE_MAX || 360)),
+      keyFn: (req) => getRequestClientKey(req, client || "default"),
+      responseMessage: "webhook_rate_limited",
+      onLimit: (info) => {
+        logger.warn(
+          `webhook rate limit hit key=${info.key} ip=${info.ip} client=${info.client} count=${info.count} max=${info.max}`
+        );
+      }
+    }),
     bodyParser.json({
       limit: "2mb",
       verify: (req, _res, buf) => {

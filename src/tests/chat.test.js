@@ -79,7 +79,7 @@ test("persistent chat memory saves and loads session snapshot", async () => {
 
 test("ai setup hint includes ollama + major hosted providers", () => {
   const hint = getAiSetupHint("en");
-  assert.match(hint, /llama3\.1:8b/);
+  assert.match(hint, /deepseek-coder-v2:16b/);
   assert.match(hint, /qwen2\.5:7b/);
   assert.match(hint, /ANTHROPIC_API_KEY/);
   assert.match(hint, /XAI_API_KEY/);

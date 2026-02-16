@@ -1,0 +1,59 @@
+{
+  "ts": "2026-02-16T10:51:04.241Z",
+  "version": "0.1.1",
+  "home": "C:\\Users\\Vishal Gopal Ojha\\waba-agent\\.waba-runtime",
+  "activeClient": "default",
+  "summary": {
+    "pass": 4,
+    "warn": 3,
+    "fail": 1,
+    "ok": false
+  },
+  "checks": [
+    {
+      "name": "config_file_present",
+      "status": "pass",
+      "details": "C:\\Users\\Vishal Gopal Ojha\\waba-agent\\.waba-runtime\\config.json"
+    },
+    {
+      "name": "meta_credentials_present",
+      "status": "fail",
+      "details": "missing one or more of token / phoneNumberId / wabaId"
+    },
+    {
+      "name": "webhook_verify_token_present",
+      "status": "pass",
+      "details": null
+    },
+    {
+      "name": "ai_provider_ready",
+      "status": "pass",
+      "details": "provider=ollama (no hosted API key required)"
+    },
+    {
+      "name": "queue_runtime_ready",
+      "status": "warn",
+      "details": "WABA_QUEUE_ENABLED not set; direct execution mode"
+    },
+    {
+      "name": "sentry_runtime_ready",
+      "status": "warn",
+      "details": "Sentry not configured"
+    },
+    {
+      "name": "otel_runtime_ready",
+      "status": "warn",
+      "details": "OpenTelemetry not configured"
+    },
+    {
+      "name": "gateway_health_check",
+      "status": "pass",
+      "details": "service=waba-gateway uptime=0s"
+    }
+  ],
+  "manual_next_steps": [
+    "Run docs/production-validation-checklist.md and mark each step pass/fail.",
+    "For real Meta send/template/schedule checks, use a staging recipient and approved templates.",
+    "Capture results in HANDOFF.md and .agent/checklist.json."
+  ]
+}

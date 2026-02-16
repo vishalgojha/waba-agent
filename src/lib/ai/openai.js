@@ -2,6 +2,11 @@ const fs = require("fs-extra");
 
 const { logger } = require("../logger");
 
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
+const DEFAULT_OLLAMA_MODEL = "deepseek-coder-v2:16b";
+const DEFAULT_OLLAMA_FALLBACK_MODEL = "qwen2.5:7b";
+
 function normalizeProvider(v) {
   const raw = String(v || "").trim().toLowerCase();
   if (!raw) return null;
@@ -27,9 +32,52 @@ function defaultModelFor(provider) {
   }
 }
 
+function trimSlash(url) {
+  return String(url || "").replace(/\/+$/, "");
+}
+
+function shouldUseOllamaFallback({ providerHint, openaiApiKey, anthropicApiKey, xaiApiKey, openrouterApiKey, openaiBaseUrlInput }) {
+  const noHostedKeys = !openaiApiKey && !anthropicApiKey && !xaiApiKey && !openrouterApiKey;
+  if (!noHostedKeys) return false;
+
+  if (!providerHint) return true;
+  if (providerHint === "openai") return true;
+  if (String(providerHint).toLowerCase() === "ollama") return true;
+
+  // If someone set a local OpenAI-compatible endpoint but forgot keys, prefer local fallback.
+  const base = String(openaiBaseUrlInput || "").toLowerCase();
+  if (base.includes("127.0.0.1:11434") || base.includes("localhost:11434")) return true;
+
+  return false;
+}
+
+function buildOllamaFallbackConfig({ cfg = {}, openaiBaseUrlInput = "", openaiModelInput = "", openaiApiKey = "" } = {}) {
+  const baseUrl = trimSlash(
+    openaiBaseUrlInput
+    || cfg.ollamaBaseUrl
+    || process.env.WABA_OLLAMA_BASE_URL
+    || DEFAULT_OLLAMA_BASE_URL
+  );
+  const model = openaiModelInput
+    || cfg.ollamaModel
+    || process.env.WABA_OLLAMA_MODEL
+    || DEFAULT_OLLAMA_MODEL;
+  const apiKey = openaiApiKey || process.env.WABA_OLLAMA_API_KEY || "ollama";
+
+  return {
+    provider: "openai",
+    apiKey,
+    baseUrl,
+    model,
+    extraHeaders: {},
+    localFallback: "ollama"
+  };
+}
+
 function resolveAiProviderConfig(cfg = {}) {
   const openaiApiKey = cfg.openaiApiKey || process.env.OPENAI_API_KEY;
-  const openaiBaseUrl = (cfg.openaiBaseUrl || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
+  const openaiBaseUrlInput = cfg.openaiBaseUrl || process.env.OPENAI_BASE_URL || "";
+  const openaiBaseUrl = trimSlash(openaiBaseUrlInput || DEFAULT_OPENAI_BASE_URL);
   const openaiModel = cfg.openaiModel || process.env.WABA_OPENAI_MODEL || process.env.OPENAI_MODEL || null;
 
   const anthropicApiKey = cfg.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
@@ -46,13 +94,33 @@ function resolveAiProviderConfig(cfg = {}) {
   const openrouterSiteUrl = cfg.openrouterSiteUrl || process.env.WABA_OPENROUTER_SITE_URL || process.env.OPENROUTER_SITE_URL || "";
   const openrouterAppName = cfg.openrouterAppName || process.env.WABA_OPENROUTER_APP_NAME || process.env.OPENROUTER_APP_NAME || "waba-agent";
 
-  let provider = normalizeProvider(cfg.aiProvider || process.env.WABA_AI_PROVIDER);
+  const providerHintRaw = cfg.aiProvider || process.env.WABA_AI_PROVIDER;
+  const providerHint = String(providerHintRaw || "").trim().toLowerCase() || null;
+  let provider = normalizeProvider(providerHintRaw);
   if (!provider) {
     const hintedBase = String(openaiBaseUrl || "").toLowerCase();
     if (anthropicApiKey && !openrouterApiKey && !xaiApiKey && !openaiApiKey) provider = "anthropic";
     else if (openrouterApiKey || hintedBase.includes("openrouter.ai")) provider = "openrouter";
     else if (xaiApiKey || hintedBase.includes("api.x.ai")) provider = "xai";
     else provider = "openai";
+  }
+
+  if (
+    shouldUseOllamaFallback({
+      providerHint,
+      openaiApiKey,
+      anthropicApiKey,
+      xaiApiKey,
+      openrouterApiKey,
+      openaiBaseUrlInput
+    })
+  ) {
+    return buildOllamaFallbackConfig({
+      cfg,
+      openaiBaseUrlInput,
+      openaiModelInput: openaiModel,
+      openaiApiKey
+    });
   }
 
   switch (provider) {
@@ -152,7 +220,7 @@ async function fetchJson(url, { apiKey, method = "POST", body, timeoutMs = 60_00
 function requireKey(cfg = {}) {
   const { apiKey } = resolveAiProviderConfig(cfg);
   if (!apiKey) {
-    throw new Error("No AI provider key found. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, XAI_API_KEY, or OPENROUTER_API_KEY.");
+    throw new Error("No AI provider key found. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, XAI_API_KEY, or OPENROUTER_API_KEY. For local default, run Ollama at http://127.0.0.1:11434/v1.");
   }
   return apiKey;
 }
@@ -160,7 +228,7 @@ function requireKey(cfg = {}) {
 async function chatCompletionText(cfg, { model, system, user, maxTokens = 800, temperature = 0.2, timeoutMs = 60_000 } = {}) {
   const runtime = resolveAiProviderConfig(cfg);
   if (!runtime.apiKey) {
-    throw new Error("AI key missing. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, XAI_API_KEY, or OPENROUTER_API_KEY.");
+    throw new Error("AI key missing. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, XAI_API_KEY, or OPENROUTER_API_KEY. For local default, run Ollama at http://127.0.0.1:11434/v1.");
   }
   const m = model || runtime.model;
   if (!m) throw new Error("AI model missing. Set WABA_OPENAI_MODEL / WABA_ANTHROPIC_MODEL / WABA_XAI_MODEL / WABA_OPENROUTER_MODEL.");
@@ -194,23 +262,43 @@ async function chatCompletionText(cfg, { model, system, user, maxTokens = 800, t
     return { content, provider: runtime.provider, model: m, raw: data };
   }
 
-  const data = await fetchJson(`${runtime.baseUrl}/chat/completions`, {
-    apiKey: runtime.apiKey,
-    timeoutMs,
-    headers: runtime.extraHeaders || {},
-    body: {
-      model: m,
-      temperature,
-      max_tokens: maxTokens,
-      messages: [
-        ...(system ? [{ role: "system", content: system }] : []),
-        { role: "user", content: String(user || "") }
-      ]
-    }
+  const buildBody = (modelName) => ({
+    model: modelName,
+    temperature,
+    max_tokens: maxTokens,
+    messages: [
+      ...(system ? [{ role: "system", content: system }] : []),
+      { role: "user", content: String(user || "") }
+    ]
   });
+
+  let usedModel = m;
+  let data;
+  try {
+    data = await fetchJson(`${runtime.baseUrl}/chat/completions`, {
+      apiKey: runtime.apiKey,
+      timeoutMs,
+      headers: runtime.extraHeaders || {},
+      body: buildBody(usedModel)
+    });
+  } catch (err) {
+    const fallbackModel = process.env.WABA_OLLAMA_FALLBACK_MODEL || DEFAULT_OLLAMA_FALLBACK_MODEL;
+    const missingModel = /model .* not found/i.test(String(err?.message || ""));
+    const allowFallback = runtime.localFallback === "ollama" && missingModel && fallbackModel && fallbackModel !== usedModel;
+    if (!allowFallback) throw err;
+
+    logger.warn(`Primary Ollama model '${usedModel}' unavailable. Retrying with '${fallbackModel}'.`);
+    usedModel = fallbackModel;
+    data = await fetchJson(`${runtime.baseUrl}/chat/completions`, {
+      apiKey: runtime.apiKey,
+      timeoutMs,
+      headers: runtime.extraHeaders || {},
+      body: buildBody(usedModel)
+    });
+  }
   const content = data?.choices?.[0]?.message?.content;
   if (!content) throw new Error("AI response missing content.");
-  return { content, provider: runtime.provider, model: m, raw: data };
+  return { content, provider: runtime.provider, model: usedModel, raw: data };
 }
 
 async function chatCompletionJson(cfg, { model, system, user, maxTokens = 800 } = {}) {

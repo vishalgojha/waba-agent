@@ -1,4 +1,5 @@
-const chalk = require("chalk");
+const chalkImport = require("chalk");
+const chalk = chalkImport.default || chalkImport;
 
 const { getConfig, setConfig, clearConfig, getDefaultGraphVersion } = require("../lib/config");
 const { redactToken } = require("../lib/redact");

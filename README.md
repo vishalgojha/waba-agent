@@ -43,49 +43,59 @@ Meta permissions you typically need on the token/app:
 
 ## Quick Start
 
-1) Save auth (token + IDs)
+1) Beginner flow (recommended)
+
+```bash
+waba start
+```
+
+Shortcut: just run `waba` with no subcommand in an interactive terminal and it opens this assistant.
+
+This walks non-technical users through setup, chooses safe defaults, and can directly launch terminal hatch / chat / web dashboard.
+
+2) Save auth (token + IDs)
 
 ```bash
 waba auth login --token "<PERMANENT_TOKEN>" --phone-id "<PHONE_NUMBER_ID>" --business-id "<WABA_ID>"
 ```
 
-2) Generate verify token + setup values for Meta
+3) Generate verify token + setup values for Meta
 
 ```bash
 waba webhook setup --url "https://YOUR_PUBLIC_URL"
 ```
 
-3) Run local webhook server (dev)
+4) Run local webhook server (dev)
 
 ```bash
 waba webhook start --port 3000
 ```
 
-4) Simulate an inbound webhook POST
+5) Simulate an inbound webhook POST
 
 ```bash
 waba webhook test --target "http://localhost:3000/webhook" --text "Hi, price please"
 ```
 
-5) List templates
+6) List templates
 
 ```bash
 waba template list
 ```
 
-6) Send a pre-approved template (high risk: outbound costs)
+7) Send a pre-approved template (high risk: outbound costs)
 
 ```bash
 waba send template 9198XXXXXX --template-name "my_template" --language en --params "[\"Vishal\",\"Tomorrow 10 AM\"]"
 ```
 
-7) Agent mode (plan -> confirm -> execute tools)
+8) Agent mode (plan -> confirm -> execute tools)
 
 ```bash
 waba agent run "handle leads for real estate client" --client "acme-realty" --webhook-url "https://YOUR_PUBLIC_URL"
 ```
 
-8) Conversational chat mode (natural back-and-forth)
+9) Conversational chat mode (natural back-and-forth)
 
 ```bash
 waba chat --client acme-realty --lang en
@@ -99,10 +109,10 @@ waba chat --client acme-realty --lang en
 - `waba template create|preview|submit-for-approval|status|wait|analytics|drafts|sync-drafts`
 - `waba send template|text`
 - `waba ai <natural-language-intent>`
-- `waba order [request...]`
 - `waba agent run`
 - `waba chat|chat history|chat resume`
 - `waba gateway start`
+- `waba start` (guided setup + launch for non-technical users)
 - `waba resale activate|import|magic-start|metrics|templates`
 - `waba memory list|show|forget`
 - `waba schedule add-text|add-template|list|cancel|run`
@@ -268,6 +278,12 @@ Start webhook server as part of onboarding (blocks; use Ctrl+C to stop):
 ```bash
 waba onboard --client acme --wizard --start-webhook --ngrok --verbose
 ```
+
+Interactive wizard now also supports:
+
+- Capturing Meta credentials (`token`, `phone-id`, `business-id`) in one flow
+- Capturing AI provider setup (`openai|anthropic|xai|openrouter|ollama`) with optional key/model/base-url
+- Capturing staging verification targets (test recipient and approved template details) under client config
 
 ## Deploy (Docker)
 
@@ -581,8 +597,9 @@ Local Ollama (recommended for privacy + 16GB RAM laptops):
 
 ```bash
 setx OPENAI_BASE_URL "http://127.0.0.1:11434/v1"
+setx WABA_OPENAI_MODEL "deepseek-coder-v2:16b"
+# optional compatibility header:
 setx OPENAI_API_KEY "ollama"
-setx WABA_OPENAI_MODEL "llama3.1:8b"
 ```
 
 Anthropic:
@@ -623,8 +640,9 @@ waba ai "send 'Thanks for your inquiry' to 919812345678"
 
 Notes:
 
-- Supports provider selection via `WABA_AI_PROVIDER` = `openai|anthropic|xai|openrouter`.
+- Supports provider selection via `WABA_AI_PROVIDER` = `openai|anthropic|xai|openrouter|ollama`.
 - `waba ai` and `waba chat` use whichever provider is configured.
+- If no hosted API key is available, `waba-agent` now defaults to local Ollama (`http://127.0.0.1:11434/v1`) with model `deepseek-coder-v2:16b` unless overridden.
 - High-risk outbound actions always require confirmation.
 - If parsing is incomplete, CLI asks for missing fields.
 - If AI parsing fails, it falls back to local heuristic parsing and suggests a manual command.

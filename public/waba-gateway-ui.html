@@ -90,6 +90,7 @@
         cursor: pointer;
         transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
       }
+      button[disabled] { cursor: not-allowed; opacity: 0.6; }
       button:hover { transform: translateY(-1px); }
       button:active { transform: translateY(1px); }
       .btnPrimary {
@@ -198,7 +199,7 @@
       .actions h3 { margin: 0 0 10px; font-size: 14px; }
       .actionRow {
         display: grid;
-        grid-template-columns: 1fr auto;
+        grid-template-columns: 1fr auto auto;
         gap: 8px;
         align-items: center;
         padding: 8px;
@@ -211,6 +212,16 @@
       .risk { font-size: 11px; padding: 4px 8px; border-radius: 999px; }
       .risk.high { background: rgba(185,28,28,0.14); color: var(--danger); }
       .risk.low { background: rgba(22,101,52,0.15); color: var(--ok); }
+      .risk.medium { background: rgba(180,83,9,0.15); color: #b45309; }
+      .actionButtons { display: flex; gap: 6px; }
+      .actionButtons button { padding: 6px 8px; font-size: 12px; }
+      .empty {
+        border: 1px dashed rgba(23, 32, 42, 0.16);
+        border-radius: 10px;
+        padding: 12px;
+        color: var(--muted);
+        background: rgba(255,255,255,0.72);
+      }
       .composer {
         display: grid;
         grid-template-columns: 1fr auto;
@@ -227,11 +238,54 @@
       .stagger > *:nth-child(3) { animation-delay: .08s; }
       .stagger > *:nth-child(4) { animation-delay: .12s; }
       .stagger > *:nth-child(5) { animation-delay: .16s; }
+      .toasts {
+        position: fixed;
+        right: 14px;
+        bottom: 14px;
+        z-index: 20;
+        width: min(330px, calc(100vw - 24px));
+        display: grid;
+        gap: 8px;
+      }
+      .toast {
+        border-radius: 11px;
+        border: 1px solid rgba(23,32,42,0.12);
+        padding: 10px 11px;
+        background: rgba(255,255,255,0.95);
+        box-shadow: 0 8px 22px rgba(19, 34, 56, 0.18);
+        font-size: 13px;
+      }
+      .toast.ok { border-color: rgba(22,101,52,0.22); }
+      .toast.warn { border-color: rgba(180,83,9,0.24); }
+      .toast.err { border-color: rgba(185,28,28,0.24); }
+      .skeleton {
+        position: relative;
+        overflow: hidden;
+        color: transparent !important;
+      }
+      .skeleton::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.65), rgba(255,255,255,0));
+        animation: shimmer 1.4s linear infinite;
+      }
+      @keyframes shimmer {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(100%); }
+      }
       @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.99);} to { opacity: 1; transform: translateY(0) scale(1);} }
       @media (max-width: 980px) {
         body { overflow: auto; }
         .layout { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
         .main { min-height: 72vh; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
       }
     </style>
   </head>
@@ -287,12 +341,16 @@
         <section class="chat" id="chatLog"></section>
 
         <section class="actions" id="actionsBox" style="display:none;">
-          <h3>Proposed Actions</h3>
+          <h3 style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <span>Proposed Actions</span>
+            <span class="mono" id="queueCount">0 pending</span>
+          </h3>
           <div id="actionList"></div>
           <div style="display:flex; gap:8px;">
             <button class="btnPrimary" id="execAllBtn">Execute All</button>
             <button class="btnGhost" id="clearActionsBtn">Clear</button>
           </div>
+          <div class="hint">Approve/reject individually, or execute entire queue.</div>
         </section>
 
         <section>
@@ -306,39 +364,98 @@
         </section>
       </main>
     </div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
 
     <script>
+      const HIGH_RISK = new Set(["message.send_text", "template.send", "schedule.add_text", "schedule.add_template", "lead.schedule_followup", "lead.escalate_human"]);
+      const MEDIUM_RISK = new Set(["lead.tag", "schedule.run_due"]);
+
       const state = {
         sessionId: null,
         actions: [],
         resale: {
           magicEnabled: false,
           share: null
+        },
+        req: {
+          summary: 0,
+          sessions: 0
+        },
+        busy: {
+          start: false,
+          send: false,
+          execute: false
         }
       };
 
       const $ = (id) => document.getElementById(id);
       const chatLog = $("chatLog");
 
+      function toast(type, message) {
+        const host = $("toasts");
+        const el = document.createElement("div");
+        el.className = "toast " + (type || "ok");
+        el.textContent = String(message || "");
+        host.appendChild(el);
+        setTimeout(() => {
+          el.style.opacity = "0";
+          setTimeout(() => el.remove(), 200);
+        }, 3000);
+      }
+
+      function setBusy(button, isBusy, busyLabel) {
+        if (!button) return;
+        if (isBusy) {
+          if (!button.dataset.label) button.dataset.label = button.textContent;
+          button.disabled = true;
+          if (busyLabel) button.textContent = busyLabel;
+          return;
+        }
+        button.disabled = false;
+        if (button.dataset.label) button.textContent = button.dataset.label;
+      }
+
+      function withSkeleton(ids, on) {
+        for (const id of ids) {
+          const node = $(id);
+          if (!node) continue;
+          if (on) node.classList.add("skeleton");
+          else node.classList.remove("skeleton");
+        }
+      }
+
       function escapeHtml(s) {
         return String(s || "")
           .replace(/&/g, "&amp;")
           .replace(/</g, "&lt;")
           .replace(/>/g, "&gt;")
-          .replace(/\\"/g, "&quot;");
+          .replace(/"/g, "&quot;");
       }
 
       async function api(url, options = {}) {
-        const res = await fetch(url, {
-          method: options.method || "GET",
-          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-          body: options.body ? JSON.stringify(options.body) : undefined
-        });
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(txt || ("HTTP " + res.status));
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), Number(options.timeoutMs || 30000));
+        try {
+          const res = await fetch(url, {
+            method: options.method || "GET",
+            headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+            body: options.body ? JSON.stringify(options.body) : undefined,
+            signal: controller.signal
+          });
+          const raw = await res.text();
+          let data = {};
+          try {
+            data = raw ? JSON.parse(raw) : {};
+          } catch {
+            data = { raw };
+          }
+          if (!res.ok) {
+            throw new Error(String(data?.error || data?.message || raw || ("HTTP " + res.status)));
+          }
+          return data;
+        } finally {
+          clearTimeout(timeout);
         }
-        return res.json();
       }
 
       function addMessage(role, content) {
@@ -346,20 +463,78 @@
         wrap.className = "msgWrap " + (role === "user" ? "user" : "agent");
         const bubble = document.createElement("div");
         bubble.className = "msg " + (role === "user" ? "user" : "agent");
-        bubble.innerHTML = escapeHtml(content).replace(/\\n/g, "<br/>");
+        bubble.innerHTML = escapeHtml(content).replace(/\n/g, "<br/>");
         wrap.appendChild(bubble);
         chatLog.appendChild(wrap);
         chatLog.scrollTop = chatLog.scrollHeight;
+      }
+
+      function clearChatWithEmpty(text) {
+        chatLog.innerHTML = "<div class='empty'>" + escapeHtml(text) + "</div>";
       }
 
       function setSessionBadge() {
         $("sessionBadge").textContent = state.sessionId ? ("Session " + state.sessionId) : "No session";
       }
 
+      function actionRisk(action) {
+        const tool = String(action?.tool || action?.fn || action?.action || "");
+        if (HIGH_RISK.has(tool)) return "high";
+        if (MEDIUM_RISK.has(tool)) return "medium";
+        return "low";
+      }
+
+      function normalizeActions(payload) {
+        if (Array.isArray(payload?.pending_actions)) return payload.pending_actions;
+        if (Array.isArray(payload?.response?.actions)) return payload.response.actions;
+        if (Array.isArray(payload?.actions)) return payload.actions;
+        return [];
+      }
+
+      async function approveAction(actionId, btn) {
+        if (!state.sessionId || !actionId) return;
+        setBusy(btn, true, "Approving...");
+        try {
+          const out = await api("/api/session/" + encodeURIComponent(state.sessionId) + "/execute", {
+            method: "POST",
+            body: { actionId, allowHighRisk: $("allowHighRisk").checked }
+          });
+          const e = out.execution || {};
+          state.actions = Array.isArray(out.pending_actions) ? out.pending_actions : [];
+          renderActions();
+          toast("ok", "Approved: ok=" + Number(e.ok || 0) + ", failed=" + Number(e.failed || 0));
+          await refreshSummary();
+        } catch (err) {
+          toast("err", "Approve failed: " + err.message);
+        } finally {
+          setBusy(btn, false);
+        }
+      }
+
+      async function rejectAction(actionId, btn) {
+        if (!state.sessionId || !actionId) return;
+        setBusy(btn, true, "Rejecting...");
+        try {
+          const out = await api("/api/session/" + encodeURIComponent(state.sessionId) + "/reject", {
+            method: "POST",
+            body: { actionId }
+          });
+          state.actions = Array.isArray(out.pending_actions) ? out.pending_actions : [];
+          renderActions();
+          toast("warn", "Rejected action " + actionId);
+          await refreshSummary();
+        } catch (err) {
+          toast("err", "Reject failed: " + err.message);
+        } finally {
+          setBusy(btn, false);
+        }
+      }
+
       function renderActions() {
         const box = $("actionsBox");
         const list = $("actionList");
         list.innerHTML = "";
+        $("queueCount").textContent = state.actions.length + " pending";
         if (!state.actions.length) {
           box.style.display = "none";
           return;
@@ -368,9 +543,26 @@
         for (const a of state.actions) {
           const row = document.createElement("div");
           row.className = "actionRow";
-          const highRisk = ["message.send_text", "template.send", "schedule.add_text", "schedule.add_template"].includes(a.tool);
-          row.innerHTML = "<div><div class='desc'>" + escapeHtml(a.description || a.tool) + "</div><div class='mono'>" + escapeHtml(a.tool) + "</div></div>" +
-            "<span class='risk " + (highRisk ? "high" : "low") + "'>" + (highRisk ? "HIGH RISK" : "LOW RISK") + "</span>";
+          const id = String(a?.id || a?.action_id || "");
+          const risk = actionRisk(a);
+          row.innerHTML = "<div><div class='desc'>" + escapeHtml(a.description || a.tool || "Pending action") + "</div><div class='mono'>" +
+            escapeHtml(String(a.tool || a.fn || "tool.unknown")) + (id ? (" | id " + escapeHtml(id)) : "") + "</div></div>" +
+            "<span class='risk " + risk + "'>" + risk.toUpperCase() + " RISK</span>";
+          const buttons = document.createElement("div");
+          buttons.className = "actionButtons";
+          const approve = document.createElement("button");
+          approve.className = "btnPrimary";
+          approve.textContent = "Approve";
+          approve.disabled = !id;
+          approve.onclick = () => approveAction(id, approve);
+          const reject = document.createElement("button");
+          reject.className = "btnGhost";
+          reject.textContent = "Reject";
+          reject.disabled = !id;
+          reject.onclick = () => rejectAction(id, reject);
+          buttons.appendChild(approve);
+          buttons.appendChild(reject);
+          row.appendChild(buttons);
           list.appendChild(row);
         }
       }
@@ -384,90 +576,137 @@
           b.textContent = s;
           b.onclick = () => {
             $("msgInput").value = s;
-            sendMessage();
+            sendMessage().catch((err) => toast("err", err.message));
           };
           chips.appendChild(b);
         }
       }
 
-      async function startSession() {
+      async function startSession({ sessionId = null, language = null } = {}) {
+        if (state.busy.start) return;
+        state.busy.start = true;
+        setBusy($("startBtn"), true, "Starting...");
         const client = $("clientInput").value.trim() || "default";
-        const language = $("langInput").value || "en";
-        const data = await api("/api/session/start", {
-          method: "POST",
-          body: { client, language }
-        });
-        state.sessionId = data.session.id;
-        setSessionBadge();
-        chatLog.innerHTML = "";
-        for (const m of data.session.context.messages || []) addMessage(m.role, m.content);
-        if (!(data.session.context.messages || []).length) {
-          addMessage("agent", data.greeting || "Session ready.");
+        const lang = language || $("langInput").value || "en";
+        try {
+          const data = await api("/api/session/start", {
+            method: "POST",
+            body: { client, language: lang, sessionId: sessionId || undefined }
+          });
+          state.sessionId = data.session?.id || data.session_id;
+          setSessionBadge();
+          chatLog.innerHTML = "";
+          const messages = Array.isArray(data.messages) ? data.messages : (data.session?.context?.messages || []);
+          if (messages.length) {
+            for (const m of messages) addMessage(m.role, m.content);
+          } else {
+            addMessage("agent", data.greeting || "Session ready.");
+          }
+          state.actions = normalizeActions(data);
+          renderActions();
+          await Promise.all([refreshSummary(), refreshSessions()]);
+          toast("ok", "Session ready.");
+        } finally {
+          state.busy.start = false;
+          setBusy($("startBtn"), false);
         }
-        state.actions = [];
-        renderActions();
-        await refreshSummary();
-        await refreshSessions();
       }
 
       async function sendMessage() {
+        if (state.busy.send) return;
         const msg = $("msgInput").value.trim();
         if (!msg) return;
         if (!state.sessionId) await startSession();
+        if (!state.sessionId) return;
+        state.busy.send = true;
+        setBusy($("sendBtn"), true, "Sending...");
         addMessage("user", msg);
         $("msgInput").value = "";
         const allowHighRisk = $("allowHighRisk").checked;
-        const out = await api("/api/session/" + encodeURIComponent(state.sessionId) + "/message", {
-          method: "POST",
-          body: { message: msg, autoExecute: false, allowHighRisk }
-        });
-        addMessage("agent", out.response.message || "Done.");
-        state.actions = Array.isArray(out.response.actions) ? out.response.actions : [];
-        renderActions();
-        renderSuggestions(out.response.suggestions || []);
-        await refreshSummary();
-        await refreshSessions();
+        try {
+          const out = await api("/api/session/" + encodeURIComponent(state.sessionId) + "/message", {
+            method: "POST",
+            body: { message: msg, autoExecute: false, allowHighRisk }
+          });
+          addMessage("agent", out.response?.message || out.reply || "Done.");
+          state.actions = normalizeActions(out);
+          renderActions();
+          renderSuggestions(out.response?.suggestions || []);
+          await Promise.all([refreshSummary(), refreshSessions()]);
+        } finally {
+          state.busy.send = false;
+          setBusy($("sendBtn"), false);
+        }
       }
 
       async function executeAll() {
-        if (!state.sessionId || !state.actions.length) return;
+        if (state.busy.execute) return;
+        if (!state.sessionId || !state.actions.length) {
+          toast("warn", "No pending actions to execute.");
+          return;
+        }
+        state.busy.execute = true;
+        setBusy($("execAllBtn"), true, "Executing...");
         const allowHighRisk = $("allowHighRisk").checked;
-        const out = await api("/api/session/" + encodeURIComponent(state.sessionId) + "/execute", {
-          method: "POST",
-          body: { actions: state.actions, allowHighRisk }
-        });
-        addMessage("agent", "Execution complete: " + out.execution.ok + " ok, " + out.execution.failed + " failed.");
-        state.actions = [];
-        renderActions();
-        await refreshSummary();
+        try {
+          const out = await api("/api/session/" + encodeURIComponent(state.sessionId) + "/execute", {
+            method: "POST",
+            body: { actions: state.actions, allowHighRisk }
+          });
+          addMessage("agent", "Execution complete: " + out.execution.ok + " ok, " + out.execution.failed + " failed.");
+          state.actions = Array.isArray(out.pending_actions) ? out.pending_actions : [];
+          renderActions();
+          await refreshSummary();
+          toast("ok", "Execution completed.");
+        } finally {
+          state.busy.execute = false;
+          setBusy($("execAllBtn"), false);
+        }
       }
 
       async function refreshSummary() {
+        const ticket = ++state.req.summary;
         const client = $("clientInput").value.trim() || "default";
-        const summary = await api("/api/summary?client=" + encodeURIComponent(client) + "&days=30");
-        $("sMissed").textContent = String(summary.missedLeads || 0);
-        $("sLeads").textContent = String(summary.metrics?.leads?.inboundMessages ?? "-");
-        const avg = summary.metrics?.responses?.avgMinutes;
-        $("sResp").textContent = Number.isFinite(avg) ? (avg.toFixed(1) + "m") : "-";
-        const rm = summary.resale_metrics || {};
-        $("sReengaged").textContent = String(rm.contacts_reengaged ?? "-");
-        $("sQualified").textContent = String(rm.qualified_leads ?? "-");
-        state.resale.magicEnabled = summary.resale_magic_mode === true;
-        $("magicToggleBtn").textContent = state.resale.magicEnabled ? "Magic Mode: ON" : "Magic Mode: OFF";
-        if (state.resale.magicEnabled) {
-          const win = await api("/api/resale/metrics?client=" + encodeURIComponent(client) + "&hours=48").catch(() => null);
-          state.resale.share = win?.share || null;
+        withSkeleton(["sMissed", "sLeads", "sResp", "sReengaged", "sQualified"], true);
+        try {
+          const summary = await api("/api/summary?client=" + encodeURIComponent(client) + "&days=30");
+          if (ticket !== state.req.summary) return;
+          $("sMissed").textContent = String(summary.missedLeads || 0);
+          $("sLeads").textContent = String(summary.metrics?.leads?.inboundMessages ?? "-");
+          const avg = summary.metrics?.responses?.avgMinutes;
+          $("sResp").textContent = Number.isFinite(avg) ? (avg.toFixed(1) + "m") : "-";
+          const rm = summary.resale_metrics || {};
+          $("sReengaged").textContent = String(rm.contacts_reengaged ?? "-");
+          $("sQualified").textContent = String(rm.qualified_leads ?? "-");
+          state.resale.magicEnabled = summary.resale_magic_mode === true;
+          $("magicToggleBtn").textContent = state.resale.magicEnabled ? "Magic Mode: ON" : "Magic Mode: OFF";
+          if (state.resale.magicEnabled) {
+            const win = await api("/api/resale/metrics?client=" + encodeURIComponent(client) + "&hours=48").catch(() => null);
+            if (ticket === state.req.summary) state.resale.share = win?.share || null;
+          } else {
+            state.resale.share = null;
+          }
+        } finally {
+          if (ticket === state.req.summary) {
+            withSkeleton(["sMissed", "sLeads", "sResp", "sReengaged", "sQualified"], false);
+          }
         }
       }
 
       async function toggleMagicMode() {
         const client = $("clientInput").value.trim() || "default";
         const enabled = !state.resale.magicEnabled;
-        await api("/api/resale/magic-mode", {
-          method: "POST",
-          body: { client, enabled }
-        });
-        await refreshSummary();
+        setBusy($("magicToggleBtn"), true, enabled ? "Turning ON..." : "Turning OFF...");
+        try {
+          await api("/api/resale/magic-mode", {
+            method: "POST",
+            body: { client, enabled }
+          });
+          await refreshSummary();
+          toast("ok", "Magic mode " + (enabled ? "enabled" : "disabled") + ".");
+        } finally {
+          setBusy($("magicToggleBtn"), false);
+        }
       }
 
       async function importResaleLeadsQuick() {
@@ -477,73 +716,101 @@
           "Vishal,+919812345678,2026-02-01,2 BHK Wakad,asked for brochure",
           "Priya,+919812345679,2026-01-10,3 BHK Baner,site visit pending",
           "Rahul,+919812345680,2025-12-20,2 BHK Kharadi,budget discussion"
-        ].join("\\n");
-        const out = await api("/api/resale/import", {
-          method: "POST",
-          body: { client, csv: sampleCsv, queueMagic: true }
-        });
-        addMessage("agent", "Resale import complete: " + out.imported + " leads, queued " + (out.queued?.queued || 0) + " nurture actions.");
-        await refreshSummary();
+        ].join("\n");
+        setBusy($("importResaleBtn"), true, "Importing...");
+        try {
+          const out = await api("/api/resale/import", {
+            method: "POST",
+            body: { client, csv: sampleCsv, queueMagic: true }
+          });
+          addMessage("agent", "Resale import complete: " + out.imported + " leads, queued " + (out.queued?.queued || 0) + " nurture actions.");
+          await refreshSummary();
+          toast("ok", "Leads imported.");
+        } finally {
+          setBusy($("importResaleBtn"), false);
+        }
       }
 
-      function shareWinCard() {
+      async function shareWinCard() {
         const share = state.resale.share;
         if (!share) {
-          alert("No win card data yet. Enable Magic Mode and refresh.");
+          toast("warn", "No win card data yet. Enable Magic Mode and refresh.");
           return;
         }
-        const text = [share.title, ...(share.lines || [])].join("\\n");
-        navigator.clipboard?.writeText(text).catch(() => {});
-        alert("Win summary copied:\\n\\n" + text);
+        const text = [share.title, ...(share.lines || [])].join("\n");
+        try {
+          if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+          toast("ok", "Win card copied.");
+        } catch {
+          toast("warn", "Clipboard unavailable. Showing win card in chat.");
+        }
+        addMessage("agent", text);
       }
 
       async function refreshSessions() {
+        const ticket = ++state.req.sessions;
         const client = $("clientInput").value.trim() || "default";
-        const out = await api("/api/sessions?client=" + encodeURIComponent(client));
         const box = $("sessionList");
-        box.innerHTML = "";
-        for (const s of out.sessions || []) {
-          const row = document.createElement("div");
-          row.className = "sessionItem";
-          row.innerHTML = "<div><strong>" + escapeHtml(s.id) + "</strong></div><div class='mono'>" +
-            escapeHtml(s.language + " | msgs " + s.messages + " | " + (s.lastUsedAt || "")) + "</div>";
-          row.onclick = async () => {
-            const data = await api("/api/session/start", {
-              method: "POST",
-              body: { client, sessionId: s.id, language: s.language || "en" }
-            });
-            state.sessionId = data.session.id;
-            setSessionBadge();
-            chatLog.innerHTML = "";
-            for (const m of data.session.context.messages || []) addMessage(m.role, m.content);
-            state.actions = [];
-            renderActions();
-          };
-          box.appendChild(row);
+        box.innerHTML = "<div class='empty'>Loading sessions...</div>";
+        try {
+          const out = await api("/api/sessions?client=" + encodeURIComponent(client));
+          if (ticket !== state.req.sessions) return;
+          box.innerHTML = "";
+          if (!(out.sessions || []).length) {
+            box.innerHTML = "<div class='empty'>No recent sessions.</div>";
+            return;
+          }
+          for (const s of out.sessions || []) {
+            const row = document.createElement("button");
+            row.type = "button";
+            row.className = "sessionItem";
+            row.innerHTML = "<div><strong>" + escapeHtml(s.id) + "</strong></div><div class='mono'>" +
+              escapeHtml(s.language + " | msgs " + s.messages + " | " + (s.lastUsedAt || "")) + "</div>";
+            row.onclick = () => startSession({ sessionId: s.id, language: s.language || "en" }).catch((err) => toast("err", err.message));
+            box.appendChild(row);
+          }
+        } catch (err) {
+          if (ticket === state.req.sessions) {
+            box.innerHTML = "<div class='empty'>Could not load sessions.</div>";
+          }
+          throw err;
         }
       }
 
-      $("startBtn").onclick = () => startSession().catch(err => alert(err.message));
-      $("refreshBtn").onclick = () => Promise.all([refreshSummary(), refreshSessions()]).catch(err => alert(err.message));
-      $("magicToggleBtn").onclick = () => toggleMagicMode().catch(err => alert(err.message));
-      $("importResaleBtn").onclick = () => importResaleLeadsQuick().catch(err => alert(err.message));
-      $("shareWinBtn").onclick = () => shareWinCard();
-      $("sendBtn").onclick = () => sendMessage().catch(err => alert(err.message));
-      $("execAllBtn").onclick = () => executeAll().catch(err => alert(err.message));
-      $("clearActionsBtn").onclick = () => { state.actions = []; renderActions(); };
+      async function loadConfig() {
+        try {
+          const cfg = await api("/api/config");
+          if (cfg?.activeClient) $("clientInput").value = cfg.activeClient;
+        } catch {}
+      }
+
+      $("startBtn").onclick = () => startSession().catch(err => toast("err", err.message));
+      $("refreshBtn").onclick = () => Promise.all([refreshSummary(), refreshSessions()]).catch(err => toast("err", err.message));
+      $("magicToggleBtn").onclick = () => toggleMagicMode().catch(err => toast("err", err.message));
+      $("importResaleBtn").onclick = () => importResaleLeadsQuick().catch(err => toast("err", err.message));
+      $("shareWinBtn").onclick = () => shareWinCard().catch(err => toast("err", err.message));
+      $("sendBtn").onclick = () => sendMessage().catch(err => toast("err", err.message));
+      $("execAllBtn").onclick = () => executeAll().catch(err => toast("err", err.message));
+      $("clearActionsBtn").onclick = () => { state.actions = []; renderActions(); toast("warn", "Queue cleared locally."); };
       $("msgInput").addEventListener("keydown", (ev) => {
         if (ev.key === "Enter" && !ev.shiftKey) {
           ev.preventDefault();
-          sendMessage().catch(err => alert(err.message));
+          sendMessage().catch(err => toast("err", err.message));
         }
+      });
+      $("allowHighRisk").addEventListener("change", (ev) => {
+        toast(ev.target.checked ? "warn" : "ok", ev.target.checked ? "High-risk execution enabled." : "High-risk execution disabled.");
       });
 
       (async () => {
         try {
+          await loadConfig();
+          clearChatWithEmpty("Initializing gateway session...");
           await startSession();
           setInterval(() => refreshSummary().catch(() => {}), 25000);
         } catch (err) {
           addMessage("agent", "Gateway init failed: " + err.message);
+          toast("err", "Gateway init failed.");
         }
       })();
     </script>

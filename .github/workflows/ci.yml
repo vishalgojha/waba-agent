@@ -28,5 +28,26 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Test
+      - name: Smoke
         run: npm test
+
+      - name: Chat tests
+        run: npm run test:chat
+
+      - name: Gateway tests
+        run: npm run test:gateway
+
+      - name: Hatch tests
+        run: npm run test:hatch
+
+      - name: Start tests
+        run: npm run test:start
+
+      - name: CLI tests
+        run: npm run test:cli
+
+      - name: AI tests
+        run: npm run test:ai
+
+      - name: Resale tests
+        run: npm run test:resale

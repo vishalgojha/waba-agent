@@ -3,13 +3,14 @@ const crypto = require("crypto");
 const { getConfig, setConfig } = require("../lib/config");
 const { addOrUpdateClient } = require("../lib/clients");
 const { createAgentContext } = require("../lib/agent/agent");
-const { askInput, askYesNo } = require("../lib/prompt");
 const { logger } = require("../lib/logger");
 const { ensurePresetFlow } = require("../lib/flow-store");
 const { setClientConfig, getClientConfig } = require("../lib/client-config");
 const { saveDraft, loadDraft } = require("../lib/template-drafts");
 const { safeName } = require("../lib/memory");
 const { startWebhookServer } = require("../server/webhook");
+const { createWizardPrompter } = require("../lib/wizard/prompter");
+const { WizardCancelledError } = require("../lib/wizard/prompts");
 
 function base64url(buf) {
   return Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -62,12 +63,93 @@ function defaultIntentReplies(industry) {
   };
 }
 
-async function askNonEmpty(question, { optional = false } = {}) {
+function normalizeAiProvider(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (!v) return null;
+  if (["openai", "anthropic", "xai", "openrouter", "ollama"].includes(v)) return v;
+  return null;
+}
+
+function aiConfigFields(provider) {
+  switch (provider) {
+    case "openai":
+      return { keyField: "openaiApiKey", modelField: "openaiModel", baseUrlField: "openaiBaseUrl" };
+    case "anthropic":
+      return { keyField: "anthropicApiKey", modelField: "anthropicModel", baseUrlField: "anthropicBaseUrl" };
+    case "xai":
+      return { keyField: "xaiApiKey", modelField: "xaiModel", baseUrlField: "xaiBaseUrl" };
+    case "openrouter":
+      return { keyField: "openrouterApiKey", modelField: "openrouterModel", baseUrlField: "openrouterBaseUrl" };
+    case "ollama":
+      return { keyField: null, modelField: "openaiModel", baseUrlField: "openaiBaseUrl" };
+    default:
+      return { keyField: null, modelField: null, baseUrlField: null };
+  }
+}
+
+function parseTemplateParamsInput(raw) {
+  const input = String(raw || "").trim();
+  if (!input) return [];
+  if (input.startsWith("[")) {
+    const parsed = JSON.parse(input);
+    if (!Array.isArray(parsed)) throw new Error("Template params JSON must be an array.");
+    return parsed;
+  }
+  return input.split(",").map((x) => x.trim()).filter(Boolean);
+}
+
+async function askNonEmpty(prompter, question, { optional = false } = {}) {
   // Simple helper around askInput that allows blank values.
   // Note: tokens are not masked; avoid screen-sharing during onboarding.
-  const v = (await askInput(question)).trim();
+  const v = (await prompter.text({ message: question })).trim();
   if (!v && !optional) return null;
   return v || null;
+}
+
+async function runHatchPrompt(prompter, { client }) {
+  const hatchChoice = await prompter.select({
+    message: "How do you want to hatch your bot?",
+    options: [
+      { value: "tui", label: "Hatch in TUI (recommended)", hint: "Terminal-first flow for quick setup" },
+      { value: "web", label: "Open Gateway Web UI", hint: "Browser-based approvals and dashboards" },
+      { value: "later", label: "Do this later", hint: "Print next steps only" }
+    ],
+    initialValue: "tui"
+  });
+
+  if (hatchChoice === "tui") {
+    await prompter.note(
+      [
+        "Hatch TUI ready.",
+        "Run now: waba hatch --client " + client + " --start-gateway",
+        "Fallback web UI: waba gw --client " + client + " --port 3010"
+      ].join("\n"),
+      "Hatch"
+    );
+    return;
+  }
+
+  if (hatchChoice === "web") {
+    await prompter.note(
+      [
+        "Gateway hatch ready.",
+        "Run now: waba gw --client " + client + " --port 3010",
+        "Then open: http://127.0.0.1:3010/"
+      ].join("\n"),
+      "Hatch"
+    );
+    return;
+  }
+
+  await prompter.note(
+    [
+      "You can hatch anytime with either flow:",
+      "waba hatch --client " + client + " --start-gateway",
+      "waba gw --client " + client + " --port 3010",
+      "waba chat --client " + client + " (quick terminal chat)"
+    ].join("\n"),
+    "Hatch"
+  );
 }
 
 function registerOnboardCommands(program) {
@@ -89,6 +171,9 @@ function registerOnboardCommands(program) {
       const root = cmd.parent || program;
       const { json, memory } = root.opts();
       if (json) throw new Error("--json not supported for onboarding wizard.");
+      const prompter = createWizardPrompter();
+
+      try {
 
       const cfg = await getConfig();
       const client = opts.client || cfg.activeClient || "default";
@@ -101,19 +186,37 @@ function registerOnboardCommands(program) {
       let phoneId = null;
       let businessId = null;
       let publicUrl = null;
+      let aiProvider = null;
+      let aiApiKey = null;
+      let aiModel = null;
+      let aiBaseUrl = null;
 
       const interactive = !!opts.wizard && !opts.nonInteractive;
-      if (interactive) {
-        token = await askNonEmpty("Permanent access token (optional; leave blank to skip):", { optional: true });
-        phoneId = await askNonEmpty("Phone number ID (optional; leave blank to skip):", { optional: true });
-        businessId = await askNonEmpty("WABA ID (business account id) (optional; leave blank to skip):", { optional: true });
-        publicUrl = await askNonEmpty("Public URL for webhooks (optional). Example: https://xxxx.ngrok-free.app", { optional: true });
-      } else if (!opts.nonInteractive) {
-        // Backward-compatible: old behavior (interactive by default) when neither --wizard nor --non-interactive is passed.
-        token = await askNonEmpty("Permanent access token (optional; leave blank to skip):", { optional: true });
-        phoneId = await askNonEmpty("Phone number ID (optional; leave blank to skip):", { optional: true });
-        businessId = await askNonEmpty("WABA ID (business account id) (optional; leave blank to skip):", { optional: true });
-        publicUrl = await askNonEmpty("Public URL for webhooks (optional). Example: https://xxxx.ngrok-free.app", { optional: true });
+      if (!opts.nonInteractive) {
+        token = await askNonEmpty(prompter, "Permanent access token (optional; leave blank to skip):", { optional: true });
+        phoneId = await askNonEmpty(prompter, "Phone number ID (optional; leave blank to skip):", { optional: true });
+        businessId = await askNonEmpty(prompter, "WABA ID (business account id) (optional; leave blank to skip):", { optional: true });
+        publicUrl = await askNonEmpty(prompter, "Public URL for webhooks (optional). Example: https://xxxx.ngrok-free.app", { optional: true });
+
+        const wantsAiSetup = await prompter.confirm({
+          message: "Configure AI provider now (recommended for chat/gateway)?",
+          initialValue: true
+        });
+        if (wantsAiSetup) {
+          const pickedProvider = await askNonEmpty(prompter, "AI provider [openai|anthropic|xai|openrouter|ollama] (default: openai):", { optional: true });
+          aiProvider = normalizeAiProvider(pickedProvider || "openai");
+          if (!aiProvider) {
+            logger.warn("Unsupported AI provider input. Skipping AI setup.");
+          } else {
+            const providerMsg = aiProvider === "ollama" ? "Ollama selected (no hosted API key required)." : `Using provider: ${aiProvider}`;
+            logger.info(providerMsg);
+            if (aiProvider !== "ollama") {
+              aiApiKey = await askNonEmpty(prompter, `API key for ${aiProvider} (optional; leave blank to skip):`, { optional: true });
+            }
+            aiModel = await askNonEmpty(prompter, `Model override for ${aiProvider} (optional; leave blank for defaults):`, { optional: true });
+            aiBaseUrl = await askNonEmpty(prompter, `Base URL override for ${aiProvider} (optional; leave blank for defaults):`, { optional: true });
+          }
+        }
       }
 
       if (token && phoneId && businessId) {
@@ -122,6 +225,21 @@ function registerOnboardCommands(program) {
       } else {
         logger.warn("Credentials not captured. You can set them later:");
         logger.info(`waba clients add ${client} --token <TOKEN> --phone-id <PHONE_ID> --business-id <WABA_ID> --switch`);
+      }
+
+      if (aiProvider) {
+        const fields = aiConfigFields(aiProvider);
+        const patch = { aiProvider };
+        if (fields.keyField && aiApiKey) patch[fields.keyField] = aiApiKey;
+        if (fields.modelField && aiModel) patch[fields.modelField] = aiModel;
+        if (fields.baseUrlField && aiBaseUrl) patch[fields.baseUrlField] = aiBaseUrl;
+        await setConfig(patch);
+        logger.ok(`Saved AI provider config (${aiProvider}).`);
+        if (fields.keyField && !aiApiKey) {
+          logger.warn(`API key not captured for ${aiProvider}. You can set it later via env var or config.`);
+        }
+      } else if (!opts.nonInteractive) {
+        logger.warn("AI provider not configured in onboarding. Set WABA_AI_PROVIDER + provider key later to enable LLM features.");
       }
 
       // Ensure per-client scaffold exists.
@@ -166,17 +284,47 @@ function registerOnboardCommands(program) {
       logger.ok("Saved client defaults (intent replies + basic flow routing).");
 
       if (interactive) {
-        const notify = await askNonEmpty("Staff notify number for handoff (optional; E.164 without +):", { optional: true });
+        const notify = await askNonEmpty(prompter, "Staff notify number for handoff (optional; E.164 without +):", { optional: true });
         if (notify) {
           await setClientConfig(client, { handoff: { notifyNumber: notify } });
           logger.ok("Saved staff notify number in client config.");
         }
 
-        const welcomeTemplate = await askNonEmpty("Approved welcome template name (optional; used when session is closed):", { optional: true });
+        const welcomeTemplate = await askNonEmpty(prompter, "Approved welcome template name (optional; used when session is closed):", { optional: true });
         if (welcomeTemplate) {
-          const lang = (await askNonEmpty("Welcome template language (default: en):", { optional: true })) || "en";
+          const lang = (await askNonEmpty(prompter, "Welcome template language (default: en):", { optional: true })) || "en";
           await setClientConfig(client, { templates: { welcome: { name: welcomeTemplate, language: lang } } });
           logger.ok("Saved welcome template mapping in client config.");
+        }
+
+        const wantsVerificationProfile = await prompter.confirm({
+          message: "Capture staging verification target details now?",
+          initialValue: true
+        });
+        if (wantsVerificationProfile) {
+          const testRecipient = await askNonEmpty(prompter, "Staging test recipient number (optional; E.164 without +):", { optional: true });
+          const testTemplate = await askNonEmpty(prompter, "Approved template name for staging send test (optional):", { optional: true });
+          let templateLanguage = null;
+          let templateParams = [];
+          if (testTemplate) {
+            templateLanguage = (await askNonEmpty(prompter, "Template language for staging test (default: en):", { optional: true })) || "en";
+            const paramsInput = await askNonEmpty(prompter, "Sample template params (optional; JSON array or comma-separated):", { optional: true });
+            if (paramsInput) {
+              try {
+                templateParams = parseTemplateParamsInput(paramsInput);
+              } catch (err) {
+                logger.warn(`Could not parse sample params: ${err?.message || err}`);
+                templateParams = [];
+              }
+            }
+          }
+          if (testRecipient || testTemplate) {
+            const staging = {};
+            if (testRecipient) staging.testRecipient = testRecipient;
+            if (testTemplate) staging.template = { name: testTemplate, language: templateLanguage || "en", params: templateParams };
+            await setClientConfig(client, { verification: { staging } });
+            logger.ok("Saved staging verification profile in client config.");
+          }
         }
       }
 
@@ -187,7 +335,10 @@ function registerOnboardCommands(program) {
 
       // Generate local template drafts (fast client customization).
       if (interactive) {
-        const wantsDrafts = await askYesNo("Generate local template drafts for this client (recommended)?", { defaultYes: true });
+        const wantsDrafts = await prompter.confirm({
+          message: "Generate local template drafts for this client (recommended)?",
+          initialValue: true
+        });
         if (wantsDrafts) {
           const prefix = safeName(client).slice(0, 24) || "client";
           const welcomeName = `${prefix}_welcome`;
@@ -246,7 +397,9 @@ function registerOnboardCommands(program) {
       logger.info("Start receiver:");
       logger.info(`waba webhook start --client ${client} --port 3000 --ngrok --verbose`);
 
-      const wantsSheets = opts.nonInteractive ? false : await askYesNo("Configure Google Sheets lead sync now?", { defaultYes: false });
+      const wantsSheets = opts.nonInteractive
+        ? false
+        : await prompter.confirm({ message: "Configure Google Sheets lead sync now?", initialValue: false });
       if (wantsSheets) {
         logger.info("1) waba integrate google-sheets --print-apps-script");
         logger.info("2) Deploy as Web App, then:");
@@ -254,7 +407,13 @@ function registerOnboardCommands(program) {
         logger.info(`   waba sync leads --to sheets --client ${client} --days 30`);
       }
 
-      const wantsStart = opts.startWebhook || (interactive ? await askYesNo("Start webhook server now (Ctrl+C to stop)?", { defaultYes: false }) : false);
+      const wantsStart = opts.startWebhook
+        || (interactive
+          ? await prompter.confirm({
+            message: "Start webhook server now (Ctrl+C to stop)?",
+            initialValue: false
+          })
+          : false);
       if (wantsStart) {
         logger.info("Starting webhook server...");
         const out = await startWebhookServer({
@@ -278,6 +437,17 @@ function registerOnboardCommands(program) {
           logger.info(`Callback URL: ${out.publicUrl.replace(/\/+$/, "")}${opts.path}`);
           logger.info(`Verify token: ${verifyToken}`);
         }
+      }
+
+      if (interactive) {
+        await runHatchPrompt(prompter, { client });
+      }
+      } catch (err) {
+        if (err instanceof WizardCancelledError) {
+          logger.warn("Onboarding cancelled.");
+          return;
+        }
+        throw err;
       }
     });
 }

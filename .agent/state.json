@@ -1,0 +1,77 @@
+{
+  "updated_at": "2026-02-16",
+  "project": "waba-agent",
+  "branch": "main",
+  "status": "in_progress",
+  "phase": "sprint3_hatch_terminal_complete",
+  "completed": [
+    "wizard prompt abstraction added",
+    "onboarding migrated to wizard prompter",
+    "onboarding hatch choice added (tui/web/later)",
+    "optional observability bootstrap wired into cli/gateway/webhook startup",
+    "ci workflow expanded to run smoke + chat + gateway + ai + resale tests",
+    "gateway/webhook per-ip+client rate limiting middleware added",
+    "gateway action execution queue with optional BullMQ+Redis backend added",
+    "real `waba hatch` terminal command added with pending action approve/reject flow",
+    "onboarding hatch prompt now points to `waba hatch --start-gateway`",
+    "hatch unit tests added and CI includes hatch test",
+    "production validation runner + checklist added (`npm run validate:prod` + docs/production-validation-checklist.md)"
+  ],
+  "pending": [
+    "complete end-to-end production verification",
+    "install and configure @sentry/node + OpenTelemetry packages in deployment environments",
+    "install bullmq and configure REDIS_URL in deployment environments for durable queue mode"
+  ],
+  "files_changed_this_cycle": [
+    "src/commands/onboard.js",
+    "src/lib/wizard/prompter.js",
+    "src/lib/wizard/prompts.js",
+    "HANDOFF.md",
+    ".agent/state.json"
+  ],
+  "last_verified": {
+    "all_passed": true,
+    "commands": [
+      "node --check src/commands/onboard.js",
+      "node --check src/lib/wizard/prompter.js",
+      "node --check src/lib/wizard/prompts.js",
+      "cmd /c npm run test:chat",
+      "cmd /c npm run test:gateway",
+      "cmd /c npm run test:hatch",
+      "cmd /c npm run test:ai",
+      "cmd /c npm run test:resale",
+      "cmd /c npm run validate:prod -- --json",
+      "node --check src/commands/hatch.js",
+      "node --check src/lib/hatch/gateway-client.js",
+      "node --check src/lib/http-rate-limit.js",
+      "node --check src/lib/queue/execution-queue.js"
+    ]
+  },
+  "blockers": [
+    "PowerShell execution policy blocks npm.ps1; run tests via cmd /c npm ...",
+    "working tree contains unrelated in-progress changes from other takes"
+  ],
+  "required_env": [
+    "WABA_AI_PROVIDER",
+    "provider API key envs as applicable",
+    "Meta token/phone-id/waba-id for production verification"
+  ],
+  "safety_invariants": [
+    "approval gating required for high-risk actions",
+    "no eval/shell execution in action flow",
+    "preserve Hindi/English resale behavior",
+    "do not remove existing commands"
+  ],
+  "next_actions": [
+    "run real credential e2e verification for webhook + gateway + approvals",
+    "validate 24h window/template behavior and rate-limit behavior against production-like traffic",
+    "exercise 48h resale magic mode demo and export/share flow",
+    "run full demo checklist and record pass/fail"
+  ],
+  "git": {
+    "available": false,
+    "dirty": null,
+    "changed_count": null,
+    "latest_commits": []
+  }
+}

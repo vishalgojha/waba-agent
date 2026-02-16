@@ -29,13 +29,28 @@ const { registerAutopilotCommands } = require("./commands/autopilot");
 const { registerAiCommands } = require("./commands/ai");
 const { registerChatCommands } = require("./commands/chat");
 const { registerGatewayCommands } = require("./commands/gateway");
+const { registerHatchCommands } = require("./commands/hatch");
 const { registerResaleCommands } = require("./commands/resale");
-const { registerOrderCommands } = require("./commands/order");
+const { registerStartCommands } = require("./commands/start");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
+const { initObservability } = require("./lib/observability");
+const { shouldAutoStart } = require("./lib/cli-autostart");
+
+function resolveServiceName(argv = process.argv.slice(2)) {
+  const args = Array.isArray(argv) ? argv.map((x) => String(x || "").toLowerCase()) : [];
+  if (args.includes("gateway") || args.includes("gw")) return "waba-gateway";
+  if (args.includes("webhook")) return "waba-webhook";
+  return "waba-cli";
+}
 
 async function main() {
+  await initObservability({
+    serviceName: resolveServiceName(process.argv.slice(2)),
+    serviceVersion: pkg.version
+  });
+
   const program = new Command();
 
   program
@@ -88,8 +103,9 @@ async function main() {
   registerAiCommands(program);
   registerChatCommands(program);
   registerGatewayCommands(program);
+  registerHatchCommands(program);
   registerResaleCommands(program);
-  registerOrderCommands(program);
+  registerStartCommands(program);
 
   program
     .command("doctor")
@@ -99,7 +115,9 @@ async function main() {
       await doctor({ json: program.opts().json });
     });
 
-  await program.parseAsync(process.argv);
+  const rawArgs = process.argv.slice(2);
+  const argv = shouldAutoStart(rawArgs) ? [...process.argv, "start"] : process.argv;
+  await program.parseAsync(argv);
 }
 
 main().catch((err) => {

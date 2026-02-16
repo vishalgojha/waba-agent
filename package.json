@@ -38,7 +38,7 @@
   "scripts": {
     "start": "node bin/waba.js",
     "start:ts": "tsx src-ts/index.ts",
-    "build:ts:tmp": "node -e \"require('fs').rmSync('.tmp-ts',{recursive:true,force:true})\" && tsc -p tsconfig.json --outDir .tmp-ts",
+    "build:ts:tmp": "node -e \"const fs=require('fs'); fs.rmSync('.tmp-ts',{recursive:true,force:true});\" && tsc -p tsconfig.tmp.json && node -e \"const fs=require('fs'); fs.writeFileSync('.tmp-ts/package.json', JSON.stringify({type:'module'}, null, 2));\"",
     "start:ts:compiled": "npm run build:ts:tmp && node .tmp-ts/src-ts/index.js",
     "hatch:ts": "npm run build:ts:tmp && node .tmp-ts/src-ts/index.js hatch",
     "tui:ts": "tsx src-ts/index.ts tui",

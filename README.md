@@ -108,6 +108,35 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 waba chat --client acme-realty --lang en
 ```
 
+## TypeScript Control Plane (waba-ts)
+
+Run the TS control-plane CLI:
+
+```bash
+npm run start:ts -- status
+npm run tui:ts
+```
+
+Doctor scope mode:
+
+```bash
+npm run start:ts -- doctor --scope-check-mode best-effort
+npm run start:ts -- doctor --scope-check-mode strict --json
+```
+
+Replay:
+
+```bash
+npm run start:ts -- replay-list --limit 20
+npm run start:ts -- replay <id> --dry-run
+npm run start:ts -- replay <id>
+```
+
+TS TUI shortcuts:
+
+- `x` on selected `RESULTS` row opens replay confirmation modal.
+- `a` approve, `r` reject, `d` details, `h/?` help toggle.
+
 ## CLI Commands (Core)
 
 - `waba auth login|status|logout`

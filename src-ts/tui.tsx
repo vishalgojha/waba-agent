@@ -38,6 +38,15 @@ function statusColor(message: string): string {
   return theme.accent;
 }
 
+function rowColor(line: string): string {
+  if (line.includes("[C]")) return theme.critical;
+  if (line.includes("[H]")) return theme.danger;
+  if (line.includes("[M]")) return theme.warn;
+  if (line.includes("[L]")) return theme.ok;
+  if (line.toLowerCase().includes("error")) return theme.danger;
+  return theme.text;
+}
+
 function Panel({
   title,
   lines,
@@ -65,7 +74,7 @@ function Panel({
         {title}
       </Text>
       {(lines.length ? lines : ["-"]).slice(0, compact ? 5 : 8).map((line, i) => (
-        <Text key={`${title}-${i}`} color={theme.text} dimColor={!focused}>
+        <Text key={`${title}-${i}`} color={rowColor(line)} dimColor={!focused}>
           {line}
         </Text>
       ))}

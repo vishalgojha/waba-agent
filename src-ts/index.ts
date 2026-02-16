@@ -148,7 +148,8 @@ async function run() {
 
   p.command("replay")
     .argument("<id>", "replay id")
-    .action(async (id) => {
+    .option("--dry-run", "validate replay intent without executing", false)
+    .action(async (id, opts) => {
       const cfg = await requireConfigured();
       const row = await getReplayById(String(id));
       if (!row) throw new Error(`Replay id not found: ${id}`);
@@ -161,6 +162,19 @@ async function run() {
       };
       const intent = validateIntent(replayIntent);
       assertReplayIntentHasRequiredPayload(intent);
+      if (opts.dryRun) {
+        const out = {
+          ok: true,
+          dryRun: true,
+          id: row.id,
+          action: intent.action,
+          risk: intent.risk,
+          guard: "pass",
+          intent
+        };
+        console.log(JSON.stringify(out, null, 2));
+        return;
+      }
       const out = await executeIntent(intent, cfg);
       console.log(JSON.stringify(out, null, 2));
     });

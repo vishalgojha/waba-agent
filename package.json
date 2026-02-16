@@ -42,6 +42,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:tui:ts": "tsc -p tsconfig.json --outDir .tmp-ts && node .tmp-ts/tests/tui-view-model.spec.js",
     "test:ts:spec": "tsc -p tsconfig.json --outDir .tmp-ts && node .tmp-ts/tests/tui-view-model.spec.js && node .tmp-ts/tests/replay-guard.spec.js",
+    "doctor:ts:strict": "tsc -p tsconfig.json --outDir .tmp-ts && node .tmp-ts/index.js doctor --scope-check-mode strict --json",
     "test": "node scripts/smoke.js",
     "test:config": "node src/tests/config.test.js",
     "test:readiness": "node src/tests/readiness.test.js",

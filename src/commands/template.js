@@ -39,6 +39,49 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function createJsTemplateApi(cfg, creds) {
+  return new WhatsAppCloudApi({
+    token: creds.token,
+    phoneNumberId: creds.phoneNumberId,
+    wabaId: creds.wabaId,
+    graphVersion: cfg.graphVersion || "v20.0",
+    baseUrl: cfg.baseUrl
+  });
+}
+
+function findTemplateByName(data, name) {
+  const rows = data?.data || [];
+  const n = String(name || "").trim();
+  if (!n) return null;
+  return rows.find((r) => r.name === n) || null;
+}
+
+async function getTemplateByNameTsFirst(cfg, creds, name, limit = 200) {
+  try {
+    const ts = await loadTsMetaClientBridge();
+    if (ts) {
+      const api = new ts.MetaClient({
+        token: String(creds.token || ""),
+        phoneNumberId: String(creds.phoneNumberId || ""),
+        businessId: String(creds.wabaId || ""),
+        graphVersion: String(cfg.graphVersion || "v20.0"),
+        baseUrl: String(cfg.baseUrl || "https://graph.facebook.com")
+      });
+      const out = await api.listTemplates();
+      const sliced = out && typeof out === "object" && Array.isArray(out.data)
+        ? { ...out, data: out.data.slice(0, Number(limit || 200)) }
+        : out;
+      const tmpl = findTemplateByName(sliced, name);
+      if (tmpl) return tmpl;
+    }
+  } catch (err) {
+    logger.warn(`TS template lookup unavailable, falling back to JS path: ${err?.message || err}`);
+  }
+
+  const api = createJsTemplateApi(cfg, creds);
+  return api.getTemplateByName({ name, limit });
+}
+
 async function createOrSubmitTemplate(opts, { json }) {
   const cfg = await getConfig();
   const client = opts.client || cfg.activeClient || "default";
@@ -166,14 +209,7 @@ function registerTemplateCommands(program) {
       const { json } = root.opts();
       const cfg = await getConfig();
       const creds = requireClientCreds(cfg, opts.client);
-      const api = new WhatsAppCloudApi({
-        token: creds.token,
-        phoneNumberId: creds.phoneNumberId,
-        wabaId: creds.wabaId,
-        graphVersion: cfg.graphVersion || "v20.0",
-        baseUrl: cfg.baseUrl
-      });
-      const tmpl = await api.getTemplateByName({ name: opts.name, limit: opts.limit });
+      const tmpl = await getTemplateByNameTsFirst(cfg, creds, opts.name, opts.limit);
       if (!tmpl) throw new Error("Template not found.");
       const out = {
         id: tmpl.id || null,
@@ -205,14 +241,6 @@ function registerTemplateCommands(program) {
       const { json } = root.opts();
       const cfg = await getConfig();
       const creds = requireClientCreds(cfg, opts.client);
-      const api = new WhatsAppCloudApi({
-        token: creds.token,
-        phoneNumberId: creds.phoneNumberId,
-        wabaId: creds.wabaId,
-        graphVersion: cfg.graphVersion || "v20.0",
-        baseUrl: cfg.baseUrl
-      });
-
       const timeoutMs = parseDurationMs(opts.timeout);
       const intervalMs = parseDurationMs(opts.interval);
       if (!timeoutMs || timeoutMs < 1000) throw new Error("Invalid --timeout. Example: 20m");
@@ -221,7 +249,7 @@ function registerTemplateCommands(program) {
       const start = Date.now();
       let last = null;
       while (Date.now() - start < timeoutMs) {
-        const tmpl = await api.getTemplateByName({ name: opts.name, limit: opts.limit });
+        const tmpl = await getTemplateByNameTsFirst(cfg, creds, opts.name, opts.limit);
         if (!tmpl) throw new Error("Template not found.");
         last = tmpl;
         const st = String(tmpl.status || "").toUpperCase();
@@ -260,14 +288,6 @@ function registerTemplateCommands(program) {
       const client = opts.client || cfg.activeClient || "default";
       const creds = requireClientCreds(cfg, client);
 
-      const api = new WhatsAppCloudApi({
-        token: creds.token,
-        phoneNumberId: creds.phoneNumberId,
-        wabaId: creds.wabaId,
-        graphVersion: cfg.graphVersion || "v20.0",
-        baseUrl: cfg.baseUrl
-      });
-
       let params;
       try {
         params = JSON.parse(opts.params);
@@ -276,7 +296,7 @@ function registerTemplateCommands(program) {
       }
       if (!Array.isArray(params)) throw new Error("--params must be a JSON array.");
 
-      const tmpl = await api.getTemplateByName({ name: opts.name });
+      const tmpl = await getTemplateByNameTsFirst(cfg, creds, opts.name, 200);
       if (!tmpl) throw new Error("Template not found.");
       if (opts.language && tmpl.language !== opts.language) logger.warn(`Language mismatch. Found ${tmpl.language}`);
 

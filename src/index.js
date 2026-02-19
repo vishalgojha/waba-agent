@@ -35,7 +35,14 @@ const { registerStartCommands } = require("./commands/start");
 const { registerConfigCommands } = require("./commands/config");
 const { registerSetupCommands } = require("./commands/setup");
 const { registerStatusCommands } = require("./commands/status");
-const { registerTsCommands, runTsDoctor, runTsProfile, runTsNumbers } = require("./commands/ts");
+const {
+  registerTsCommands,
+  runTsDoctor,
+  runTsProfile,
+  runTsNumbers,
+  runTsReplay,
+  runTsReplayList
+} = require("./commands/ts");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -44,7 +51,6 @@ const { shouldAutoStart } = require("./lib/cli-autostart");
 const { getConfig } = require("./lib/config");
 const { requireClientCreds } = require("./lib/creds");
 const { createHttpClient } = require("./lib/http");
-const { loadTsOpsBridge, buildTsAgentConfigFromCreds } = require("./lib/ts-bridge");
 
 function resolveServiceName(argv = process.argv.slice(2)) {
   const args = Array.isArray(argv) ? argv.map((x) => String(x || "").toLowerCase()) : [];
@@ -183,6 +189,25 @@ async function main() {
         const res = await http.get(`/${creds.wabaId}/phone_numbers`);
         console.log(JSON.stringify(res.data, null, 2));
       }
+    });
+
+  program
+    .command("replay-list")
+    .description("deprecated: use `waba ts replay-list`")
+    .option("--limit <n>", "max rows", (v) => Number(v), 20)
+    .action(async (opts) => {
+      logger.warn("Deprecated path: `waba replay-list` now routes to `waba ts replay-list`.");
+      await runTsReplayList({ limit: opts.limit });
+    });
+
+  program
+    .command("replay")
+    .description("deprecated: use `waba ts replay <id>`")
+    .argument("<id>", "replay id")
+    .option("--dry-run", "validate replay without execution", false)
+    .action(async (id, opts) => {
+      logger.warn("Deprecated path: `waba replay` now routes to `waba ts replay`.");
+      await runTsReplay({ id, dryRun: !!opts.dryRun });
     });
 
   const rawArgs = process.argv.slice(2);

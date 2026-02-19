@@ -44,7 +44,7 @@
     "tui:ts": "tsx src-ts/index.ts tui",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:tui:ts": "npm run build:ts:tmp && node .tmp-ts/src-ts/tests/tui-view-model.spec.js",
-    "test:ts:spec": "npm run build:ts:tmp && node .tmp-ts/src-ts/tests/tui-view-model.spec.js && node .tmp-ts/src-ts/tests/replay-guard.spec.js && node .tmp-ts/src-ts/tests/doctor-policy.spec.js && node .tmp-ts/src-ts/tests/jaspers-playbook.spec.js && node .tmp-ts/src-ts/tests/tui-jaspers-command.spec.js && node .tmp-ts/src-ts/tests/tui-session-actions.spec.js",
+    "test:ts:spec": "npm run build:ts:tmp && node .tmp-ts/src-ts/tests/tui-view-model.spec.js && node .tmp-ts/src-ts/tests/replay-guard.spec.js && node .tmp-ts/src-ts/tests/doctor-policy.spec.js && node .tmp-ts/src-ts/tests/jaspers-playbook.spec.js && node .tmp-ts/src-ts/tests/tui-jaspers-command.spec.js && node .tmp-ts/src-ts/tests/tui-session-actions.spec.js && node .tmp-ts/src-ts/tests/tui-persist.spec.js",
     "doctor:ts:strict": "npm run build:ts:tmp && node .tmp-ts/src-ts/index.js doctor --scope-check-mode strict --fail-on-warn --json",
     "test": "node scripts/smoke.js",
     "test:config": "node src/tests/config.test.js",

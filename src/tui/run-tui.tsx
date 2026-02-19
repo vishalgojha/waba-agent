@@ -8,6 +8,7 @@ import { createInitialState, hatchReducer, makeTurn } from "./tui-session-action
 import { handleSlash } from "./tui-command-handlers.js";
 import { executeApproved, handleUserText } from "./tui-event-handlers.js";
 import { DetailsOverlay, HelpOverlay, InlineEditorHint, PaletteOverlay } from "./tui-overlays.js";
+import { loadHatchState, saveHatchState } from "./tui-persist.js";
 
 const theme = {
   text: "#D8DEE9",
@@ -84,16 +85,21 @@ export function RunTui(): React.JSX.Element {
   useEffect(() => {
     void (async () => {
       const cfg = await readConfig();
+      const persisted = await loadHatchState();
       const ready = !!(cfg.token && cfg.businessId && cfg.phoneNumberId);
       setHeader({
         ready,
         phone: cfg.phoneNumberId || "(missing)",
         business: cfg.businessId || "(missing)"
       });
-      dispatch({ type: "bootstrap", value: { connected: ready } });
+      dispatch({ type: "bootstrap", value: { connected: ready, domainFlow: persisted.domainFlow || null } });
       dispatch({ type: "push-turn", value: makeTurn("system", ready ? "Hatch session active." : "Setup missing. Run login/onboard first.") });
     })();
   }, []);
+
+  useEffect(() => {
+    void saveHatchState({ domainFlow: state.domainFlow });
+  }, [state.domainFlow]);
 
   const beginSlotEdit = (): void => {
     const plan = state.plan;

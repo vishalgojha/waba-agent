@@ -2,6 +2,12 @@ const fs = require("fs-extra");
 const path = require("path");
 
 const { contextDir } = require("./paths");
+const {
+  insertMemoryEvent,
+  readMemoryEvents,
+  listMemoryClients,
+  deleteMemoryClient
+} = require("./db/sqlite-store");
 
 function safeName(name) {
   return String(name || "default")
@@ -23,11 +29,25 @@ async function appendMemory(client, event) {
   const dir = clientDir(client);
   await fs.ensureDir(dir);
   const p = memoryPath(client);
-  const line = JSON.stringify({ ts: new Date().toISOString(), ...event }) + "\n";
+  const record = { ts: new Date().toISOString(), ...event };
+  const line = JSON.stringify(record) + "\n";
   await fs.appendFile(p, line, "utf8");
+  // Phase-1 DB migration: dual-write into SQLite when available.
+  try {
+    insertMemoryEvent(safeName(client), record);
+  } catch {}
 }
 
 async function readMemory(client, { limit = 200 } = {}) {
+  // Optional read switch once DB parity is validated:
+  // set WABA_STORAGE_READ=db to prefer SQLite reads.
+  if (String(process.env.WABA_STORAGE_READ || "").toLowerCase() === "db") {
+    try {
+      const fromDb = readMemoryEvents(safeName(client), { limit });
+      if (fromDb.length) return fromDb;
+    } catch {}
+  }
+
   const p = memoryPath(client);
   if (!(await fs.pathExists(p))) return [];
   const text = await fs.readFile(p, "utf8");
@@ -43,13 +63,23 @@ async function readMemory(client, { limit = 200 } = {}) {
 }
 
 async function listClients() {
-  if (!(await fs.pathExists(contextDir()))) return [];
-  const entries = await fs.readdir(contextDir(), { withFileTypes: true });
-  return entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  const fsClients = [];
+  if (await fs.pathExists(contextDir())) {
+    const entries = await fs.readdir(contextDir(), { withFileTypes: true });
+    fsClients.push(...entries.filter((e) => e.isDirectory()).map((e) => e.name));
+  }
+  let dbClients = [];
+  try {
+    dbClients = listMemoryClients();
+  } catch {}
+  return [...new Set([...fsClients, ...dbClients])].sort();
 }
 
 async function forgetClient(client) {
   const dir = clientDir(client);
+  try {
+    deleteMemoryClient(safeName(client));
+  } catch {}
   if (await fs.pathExists(dir)) {
     await fs.remove(dir);
     return true;
@@ -86,4 +116,3 @@ module.exports = {
   forgetClient,
   summarizeForPrompt
 };
-

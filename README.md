@@ -320,6 +320,20 @@ CI secrets (tenant-only, non-personal):
 - `WABA_CI_PHONE_NUMBER_ID`
 - optional: `WABA_CI_WEBHOOK_URL`, `WABA_CI_TEST_RECIPIENT`, `WABA_CI_TEST_TEMPLATE`
 
+## Storage Migration (Phase 1)
+
+SQLite adapter is now available in dual-write mode for memory events:
+- JSONL remains primary write/read default
+- SQLite receives best-effort mirror writes
+- optional read switch after validation: set `WABA_STORAGE_READ=db`
+
+Commands:
+```bash
+waba storage status
+waba storage migrate-memory
+npm run storage:migrate-memory
+```
+
 ## CLI Commands (Core)
 
 - `waba auth login|status|logout`

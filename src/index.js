@@ -42,6 +42,7 @@ const { registerPanicCommands } = require("./commands/panic");
 const { registerHelpMeCommands } = require("./commands/help-me");
 const { registerWhoamiCommands } = require("./commands/whoami");
 const { registerTourCommands } = require("./commands/tour");
+const { registerStorageCommands } = require("./commands/storage");
 const {
   registerTsCommands,
   runTsDoctor,
@@ -138,6 +139,7 @@ async function main() {
   registerHelpMeCommands(program);
   registerWhoamiCommands(program);
   registerTourCommands(program);
+  registerStorageCommands(program);
   registerTsCommands(program);
 
   program

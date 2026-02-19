@@ -33,4 +33,12 @@ function reportsDir() {
   return path.join(wabaHome(), "reports");
 }
 
-module.exports = { wabaHome, configPath, contextDir, schedulesPath, optoutDir, campaignsDir, reportsDir };
+function storageDir() {
+  return path.join(wabaHome(), "storage");
+}
+
+function sqlitePath() {
+  return path.join(storageDir(), "waba.sqlite");
+}
+
+module.exports = { wabaHome, configPath, contextDir, schedulesPath, optoutDir, campaignsDir, reportsDir, storageDir, sqlitePath };

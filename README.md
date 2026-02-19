@@ -56,6 +56,11 @@ Before anything else, run one simple readiness command:
 waba check
 ```
 
+One-command smart flow (check first, then open assistant when ready):
+```bash
+waba go
+```
+
 This walks non-technical users through setup, chooses safe defaults, and can directly launch terminal hatch / chat / web dashboard.
 
 2) Save auth (token + IDs)

@@ -10,6 +10,7 @@ const { resolveAiProviderConfig } = require("../lib/ai/openai");
 const { ChatSession } = require("../lib/chat/session");
 const { startGatewayServer } = require("../server/gateway");
 const { runHatchCommand } = require("./hatch");
+const { runGuidedDemo } = require("./demo");
 
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
 const DEFAULT_OLLAMA_MODEL = "deepseek-coder-v2:16b";
@@ -236,9 +237,54 @@ async function launchExperience(prompter, { client, lang, rootProgram, skipLaunc
 }
 
 function registerStartCommands(program) {
+  const runStartFlow = async (opts, root) => {
+    if (root.opts().json) throw new Error("--json is not supported for interactive start.");
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      throw new Error("waba start requires an interactive terminal.");
+    }
+
+    const prompter = createWizardPrompter();
+    try {
+      const cfg = await getConfig();
+      const client = safeClientName(opts.client || cfg.activeClient || "default");
+      const lang = opts.lang === "hi" ? "hi" : "en";
+      const status = summarizeReadiness(cfg);
+
+      logger.info(`Client: ${client}`);
+      logger.info(`Meta credentials: ${status.metaReady ? "ready" : "missing"}`);
+      logger.info(`AI mode: ${status.aiMode}${status.aiReady ? "" : " (missing key/model)"}`);
+      logger.info(`Webhook verify token: ${status.webhookReady ? "set" : "missing"}`);
+
+      const wantsMetaSetup = !status.metaReady
+        ? await prompter.confirm({ message: "Set up Meta credentials now?", initialValue: true })
+        : await prompter.confirm({ message: "Update existing Meta credentials?", initialValue: false });
+      if (wantsMetaSetup) {
+        await setupMetaCredentials(prompter, { client, appId: opts.appId });
+      }
+
+      await setupAiProvider(prompter, await getConfig());
+
+      const verifyToken = await ensureWebhookVerifyToken(await getConfig());
+      logger.ok("Setup checkpoint complete.");
+      logger.info(`Webhook verify token: ${verifyToken}`);
+
+      await launchExperience(prompter, {
+        client,
+        lang,
+        rootProgram: root,
+        skipLaunch: !!opts.skipLaunch
+      });
+    } catch (err) {
+      if (err instanceof WizardCancelledError) {
+        logger.warn("Start flow cancelled.");
+        return;
+      }
+      throw err;
+    }
+  };
+
   program
     .command("start")
-    .alias("go")
     .description("friendly non-technical setup + launch assistant")
     .option("--client <name>", "client context (default: active client or 'default')")
     .option("--lang <lang>", "assistant language en|hi", "en")
@@ -246,49 +292,31 @@ function registerStartCommands(program) {
     .option("--skip-launch", "only configure setup and exit", false)
     .action(async (opts, cmd) => {
       const root = cmd.parent || program;
-      if (root.opts().json) throw new Error("--json is not supported for interactive start.");
-      if (!process.stdin.isTTY || !process.stdout.isTTY) {
-        throw new Error("waba start requires an interactive terminal.");
+      await runStartFlow(opts, root);
+    });
+
+  program
+    .command("go")
+    .description("quick check, then auto-open start assistant when ready")
+    .option("--strict", "run strict scope checks", false)
+    .action(async (opts, cmd) => {
+      const root = cmd.parent || program;
+      const out = await runGuidedDemo({
+        autoFix: true,
+        scopeCheckMode: opts.strict ? "strict" : "best-effort"
+      });
+
+      if (out.ok) {
+        logger.ok("Environment looks ready. Opening start assistant...");
+        await runStartFlow({}, root);
+        return;
       }
 
-      const prompter = createWizardPrompter();
-      try {
-        const cfg = await getConfig();
-        const client = safeClientName(opts.client || cfg.activeClient || "default");
-        const lang = opts.lang === "hi" ? "hi" : "en";
-        const status = summarizeReadiness(cfg);
-
-        logger.info(`Client: ${client}`);
-        logger.info(`Meta credentials: ${status.metaReady ? "ready" : "missing"}`);
-        logger.info(`AI mode: ${status.aiMode}${status.aiReady ? "" : " (missing key/model)"}`);
-        logger.info(`Webhook verify token: ${status.webhookReady ? "set" : "missing"}`);
-
-        const wantsMetaSetup = !status.metaReady
-          ? await prompter.confirm({ message: "Set up Meta credentials now?", initialValue: true })
-          : await prompter.confirm({ message: "Update existing Meta credentials?", initialValue: false });
-        if (wantsMetaSetup) {
-          await setupMetaCredentials(prompter, { client, appId: opts.appId });
-        }
-
-        await setupAiProvider(prompter, await getConfig());
-
-        const verifyToken = await ensureWebhookVerifyToken(await getConfig());
-        logger.ok("Setup checkpoint complete.");
-        logger.info(`Webhook verify token: ${verifyToken}`);
-
-        await launchExperience(prompter, {
-          client,
-          lang,
-          rootProgram: root,
-          skipLaunch: !!opts.skipLaunch
-        });
-      } catch (err) {
-        if (err instanceof WizardCancelledError) {
-          logger.warn("Start flow cancelled.");
-          return;
-        }
-        throw err;
+      logger.warn("Not ready yet. Do these next:");
+      for (const step of out.next.steps.slice(0, 3)) {
+        logger.info(`${step.id}. ${step.command}`);
       }
+      process.exitCode = 1;
     });
 }
 

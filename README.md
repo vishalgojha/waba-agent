@@ -11,6 +11,23 @@ Production-focused CLI for WhatsApp Business Cloud API automation (India SMB use
 - Outbound scheduling: locally stored schedules + `schedule run`
 - Sellable delivery: per-client config + append-only memory store
 
+## Beginner Commands
+
+Use these first (no flags needed):
+
+- `waba check`: quick readiness check
+- `waba health`: same as `waba check`
+- `waba ready`: same as `waba check`
+- `waba verify`: same as `waba check`
+- `waba test`: same as `waba check`
+- `waba fix`: guided yes/no fixer
+- `waba go`: check first, then open assistant when ready
+- `waba start`: full guided setup + launch flow
+
+Friendly recovery is enabled for typos and natural verbs:
+- `waba chek` -> `waba check`
+- `waba launch assistant` -> `waba go`
+
 ## Install
 
 From npm (recommended for users):

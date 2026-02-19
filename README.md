@@ -67,6 +67,7 @@ Windows shortcuts (`.bat`) are included in `windows/`:
 - `windows\\waba-fix.bat`
 - `windows\\waba-go.bat`
 - `windows\\waba-tour.bat`
+- `windows\\waba-web.bat` (auto-opens localhost UI and starts gateway)
 - `windows\\waba-use-ollama.bat` (optional model argument, default `qwen2.5:7b`)
 
 From source (recommended for contributors):

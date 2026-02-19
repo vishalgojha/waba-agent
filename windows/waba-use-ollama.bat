@@ -16,4 +16,6 @@ echo Ollama is now the active provider.
 echo Model: %MODEL%
 echo Next: waba check
 
+echo.
+pause
 endlocal

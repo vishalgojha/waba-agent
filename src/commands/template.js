@@ -4,18 +4,7 @@ const { logger } = require("../lib/logger");
 const { saveDraft, loadDraft, listDrafts } = require("../lib/template-drafts");
 const { readMemory } = require("../lib/memory");
 const { requireClientCreds } = require("../lib/creds");
-const fs = require("fs-extra");
-const path = require("path");
-const { pathToFileURL } = require("url");
-
-async function loadTsTemplateBridge() {
-  const root = path.resolve(__dirname, "..", "..");
-  const metaJs = path.join(root, ".tmp-ts", "src-ts", "meta-client.js");
-  if (!(await fs.pathExists(metaJs))) return null;
-  const mod = await import(pathToFileURL(metaJs).href);
-  if (!mod?.MetaClient) return null;
-  return { MetaClient: mod.MetaClient };
-}
+const { loadTsMetaClientBridge } = require("../lib/ts-bridge");
 
 function parseDurationMs(s) {
   const t = String(s || "").trim().toLowerCase();
@@ -125,7 +114,7 @@ function registerTemplateCommands(program) {
       const creds = requireClientCreds(cfg, opts.client);
       let data;
       try {
-        const ts = await loadTsTemplateBridge();
+        const ts = await loadTsMetaClientBridge();
         if (ts) {
           const api = new ts.MetaClient({
             token: String(creds.token || ""),

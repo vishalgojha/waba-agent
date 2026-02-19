@@ -1,24 +1,13 @@
 const crypto = require("crypto");
-const fs = require("fs-extra");
-const path = require("path");
-const { pathToFileURL } = require("url");
 
 const { getConfig, setConfig } = require("../lib/config");
 const { addOrUpdateClient, safeClientName, switchClient } = require("../lib/clients");
 const { buildReadiness } = require("../lib/readiness");
 const { logger } = require("../lib/logger");
+const { loadTsConfigBridge } = require("../lib/ts-bridge");
 
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
 const DEFAULT_OLLAMA_MODEL = "deepseek-coder-v2:16b";
-
-async function loadTsConfigBridge() {
-  const root = path.resolve(__dirname, "..", "..");
-  const configJs = path.join(root, ".tmp-ts", "src-ts", "config.js");
-  if (!(await fs.pathExists(configJs))) return null;
-  const mod = await import(pathToFileURL(configJs).href);
-  if (!mod?.readConfig || !mod?.writeConfig) return null;
-  return { readConfig: mod.readConfig, writeConfig: mod.writeConfig };
-}
 
 function base64url(buf) {
   return Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");

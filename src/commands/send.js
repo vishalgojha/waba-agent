@@ -3,24 +3,7 @@ const { WhatsAppCloudApi } = require("../lib/whatsapp");
 const { logger } = require("../lib/logger");
 const { isOptedOut } = require("../lib/optout-store");
 const { requireClientCreds } = require("../lib/creds");
-const fs = require("fs-extra");
-const path = require("path");
-const { pathToFileURL } = require("url");
-
-async function loadTsSendBridge() {
-  const root = path.resolve(__dirname, "..", "..");
-  const executorJs = path.join(root, ".tmp-ts", "src-ts", "engine", "executor.js");
-  const schemaJs = path.join(root, ".tmp-ts", "src-ts", "engine", "schema.js");
-  if (!(await fs.pathExists(executorJs)) || !(await fs.pathExists(schemaJs))) return null;
-
-  const execMod = await import(pathToFileURL(executorJs).href);
-  const schemaMod = await import(pathToFileURL(schemaJs).href);
-  if (!execMod?.executeIntent || !schemaMod?.validateIntent) return null;
-  return {
-    executeIntent: execMod.executeIntent,
-    validateIntent: schemaMod.validateIntent
-  };
-}
+const { loadTsOpsBridge, buildTsAgentConfigFromCreds } = require("../lib/ts-bridge");
 
 function tryParseJson(s) {
   if (!s) return undefined;
@@ -54,7 +37,7 @@ function registerSendCommands(program) {
       let data;
       const params = tryParseJson(opts.params);
       try {
-        const ts = await loadTsSendBridge();
+        const ts = await loadTsOpsBridge();
         if (ts) {
           const intent = ts.validateIntent({
             action: "send_template",
@@ -68,13 +51,7 @@ function registerSendCommands(program) {
             },
             risk: "HIGH"
           });
-          const out = await ts.executeIntent(intent, {
-            token: String(creds.token || ""),
-            businessId: String(creds.wabaId || ""),
-            phoneNumberId: String(creds.phoneNumberId || ""),
-            graphVersion: String(cfg.graphVersion || "v20.0"),
-            baseUrl: String(cfg.baseUrl || "https://graph.facebook.com")
-          });
+          const out = await ts.executeIntent(intent, buildTsAgentConfigFromCreds(cfg, creds));
           data = out.output;
         }
       } catch (err) {
@@ -127,7 +104,7 @@ function registerSendCommands(program) {
       logger.warn("Costs: per-message billed (India approx: ~INR 0.11 utility, ~INR 0.78 marketing; verify current rates in Meta).");
       let data;
       try {
-        const ts = await loadTsSendBridge();
+        const ts = await loadTsOpsBridge();
         if (ts) {
           const intent = ts.validateIntent({
             action: "send_text",
@@ -140,13 +117,7 @@ function registerSendCommands(program) {
             },
             risk: "HIGH"
           });
-          const out = await ts.executeIntent(intent, {
-            token: String(creds.token || ""),
-            businessId: String(creds.wabaId || ""),
-            phoneNumberId: String(creds.phoneNumberId || ""),
-            graphVersion: String(cfg.graphVersion || "v20.0"),
-            baseUrl: String(cfg.baseUrl || "https://graph.facebook.com")
-          });
+          const out = await ts.executeIntent(intent, buildTsAgentConfigFromCreds(cfg, creds));
           data = out.output;
         }
       } catch (err) {

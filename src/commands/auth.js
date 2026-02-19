@@ -1,21 +1,10 @@
 const chalkImport = require("chalk");
 const chalk = chalkImport.default || chalkImport;
-const fs = require("fs-extra");
-const path = require("path");
-const { pathToFileURL } = require("url");
 
 const { getConfig, setConfig, clearConfig, getDefaultGraphVersion } = require("../lib/config");
 const { redactToken } = require("../lib/redact");
 const { logger } = require("../lib/logger");
-
-async function loadTsConfigBridge() {
-  const root = path.resolve(__dirname, "..", "..");
-  const configJs = path.join(root, ".tmp-ts", "src-ts", "config.js");
-  if (!(await fs.pathExists(configJs))) return null;
-  const mod = await import(pathToFileURL(configJs).href);
-  if (!mod?.readConfig || !mod?.writeConfig) return null;
-  return { readConfig: mod.readConfig, writeConfig: mod.writeConfig };
-}
+const { loadTsConfigBridge } = require("../lib/ts-bridge");
 
 function registerAuthCommands(program) {
   const auth = program.command("auth").description("configure WhatsApp Cloud API auth");

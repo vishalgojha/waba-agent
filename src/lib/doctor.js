@@ -1,33 +1,11 @@
 const fs = require("fs-extra");
-const path = require("path");
-const { pathToFileURL } = require("url");
 
 const { getConfig } = require("./config");
 const { resolveAiProviderConfig } = require("./ai/openai");
 const { configPath, wabaHome } = require("./paths");
 const { redactToken } = require("./redact");
 const { logger } = require("./logger");
-
-async function loadTsDoctorBridge() {
-  const root = path.resolve(__dirname, "..", "..");
-  const doctorJs = path.join(root, ".tmp-ts", "src-ts", "doctor.js");
-  const configJs = path.join(root, ".tmp-ts", "src-ts", "config.js");
-  const policyJs = path.join(root, ".tmp-ts", "src-ts", "doctor-policy.js");
-
-  const hasAll = (await fs.pathExists(doctorJs)) && (await fs.pathExists(configJs)) && (await fs.pathExists(policyJs));
-  if (!hasAll) return null;
-
-  const doctorMod = await import(pathToFileURL(doctorJs).href);
-  const configMod = await import(pathToFileURL(configJs).href);
-  const policyMod = await import(pathToFileURL(policyJs).href);
-  if (!doctorMod?.runDoctor || !configMod?.readConfig || !policyMod?.shouldFailDoctorGate) return null;
-
-  return {
-    runDoctor: doctorMod.runDoctor,
-    readConfig: configMod.readConfig,
-    shouldFailDoctorGate: policyMod.shouldFailDoctorGate
-  };
-}
+const { loadTsDoctorBridge } = require("./ts-bridge");
 
 function printDoctorReport(report, gateFail, json) {
   if (json) {

@@ -2,9 +2,6 @@ const { Command } = require("commander");
 const figlet = require("figlet");
 const chalkImport = require("chalk");
 const chalk = chalkImport.default || chalkImport;
-const fs = require("fs-extra");
-const path = require("path");
-const { pathToFileURL } = require("url");
 
 const { registerAuthCommands } = require("./commands/auth");
 const { registerWebhookCommands } = require("./commands/webhook");
@@ -46,23 +43,13 @@ const { shouldAutoStart } = require("./lib/cli-autostart");
 const { getConfig } = require("./lib/config");
 const { requireClientCreds } = require("./lib/creds");
 const { createHttpClient } = require("./lib/http");
+const { loadTsOpsBridge, buildTsAgentConfigFromCreds } = require("./lib/ts-bridge");
 
 function resolveServiceName(argv = process.argv.slice(2)) {
   const args = Array.isArray(argv) ? argv.map((x) => String(x || "").toLowerCase()) : [];
   if (args.includes("gateway") || args.includes("gw")) return "waba-gateway";
   if (args.includes("webhook")) return "waba-webhook";
   return "waba-cli";
-}
-
-async function loadTsOpsBridge() {
-  const root = path.resolve(__dirname, "..");
-  const execJs = path.join(root, ".tmp-ts", "src-ts", "engine", "executor.js");
-  const schemaJs = path.join(root, ".tmp-ts", "src-ts", "engine", "schema.js");
-  if (!(await fs.pathExists(execJs)) || !(await fs.pathExists(schemaJs))) return null;
-  const execMod = await import(pathToFileURL(execJs).href);
-  const schemaMod = await import(pathToFileURL(schemaJs).href);
-  if (!execMod?.executeIntent || !schemaMod?.validateIntent) return null;
-  return { executeIntent: execMod.executeIntent, validateIntent: schemaMod.validateIntent };
 }
 
 async function main() {
@@ -160,13 +147,7 @@ async function main() {
           payload: {},
           risk: "LOW"
         });
-        const out = await bridge.executeIntent(intent, {
-          token: String(creds.token || ""),
-          businessId: String(creds.wabaId || ""),
-          phoneNumberId: String(creds.phoneNumberId || ""),
-          graphVersion: String(cfg.graphVersion || "v20.0"),
-          baseUrl: String(cfg.baseUrl || "https://graph.facebook.com")
-        });
+        const out = await bridge.executeIntent(intent, buildTsAgentConfigFromCreds(cfg, creds));
         console.log(JSON.stringify(out.output, null, 2));
         return;
       }
@@ -196,13 +177,7 @@ async function main() {
           payload: {},
           risk: "LOW"
         });
-        const out = await bridge.executeIntent(intent, {
-          token: String(creds.token || ""),
-          businessId: String(creds.wabaId || ""),
-          phoneNumberId: String(creds.phoneNumberId || ""),
-          graphVersion: String(cfg.graphVersion || "v20.0"),
-          baseUrl: String(cfg.baseUrl || "https://graph.facebook.com")
-        });
+        const out = await bridge.executeIntent(intent, buildTsAgentConfigFromCreds(cfg, creds));
         console.log(JSON.stringify(out.output, null, 2));
         return;
       }

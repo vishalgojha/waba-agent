@@ -1,19 +1,8 @@
-const fs = require("fs-extra");
-const path = require("path");
-const { pathToFileURL } = require("url");
 const { getConfig } = require("../lib/config");
 const { redactToken } = require("../lib/redact");
 const { logger } = require("../lib/logger");
 const { buildReadiness } = require("../lib/readiness");
-
-async function loadTsConfigBridge() {
-  const root = path.resolve(__dirname, "..", "..");
-  const configJs = path.join(root, ".tmp-ts", "src-ts", "config.js");
-  if (!(await fs.pathExists(configJs))) return null;
-  const mod = await import(pathToFileURL(configJs).href);
-  if (!mod?.readConfig) return null;
-  return { readConfig: mod.readConfig };
-}
+const { loadTsConfigBridge } = require("../lib/ts-bridge");
 
 function registerStatusCommands(program) {
   program

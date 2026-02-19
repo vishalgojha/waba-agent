@@ -40,6 +40,14 @@ First-time order:
 2. `waba fix`
 3. `waba go`
 
+Default AI provider:
+- `ollama` is the default if you do not set a provider.
+- users can switch any time with:
+  - `waba config set aiProvider openai`
+  - `waba config set aiProvider anthropic`
+  - `waba config set aiProvider xai`
+  - `waba config set aiProvider openrouter`
+
 ## Install
 
 From npm (recommended for users):
@@ -53,6 +61,13 @@ If PowerShell blocks `npm` (execution policy), use:
 ```bash
 npm.cmd i -g @vishalgojha/waba-agent
 ```
+
+Windows shortcuts (`.bat`) are included in `windows/`:
+- `windows\\waba-check.bat`
+- `windows\\waba-fix.bat`
+- `windows\\waba-go.bat`
+- `windows\\waba-tour.bat`
+- `windows\\waba-use-ollama.bat` (optional model argument, default `qwen2.5:7b`)
 
 From source (recommended for contributors):
 

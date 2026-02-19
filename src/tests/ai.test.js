@@ -183,6 +183,28 @@ test("provider resolver: defaults to local Ollama when no hosted key is availabl
   }
 });
 
+test("provider resolver: explicit ollama wins even when hosted keys are present", () => {
+  const prev = {
+    WABA_OLLAMA_BASE_URL: process.env.WABA_OLLAMA_BASE_URL,
+    OPENAI_BASE_URL: process.env.OPENAI_BASE_URL
+  };
+  try {
+    delete process.env.WABA_OLLAMA_BASE_URL;
+    delete process.env.OPENAI_BASE_URL;
+    const runtime = resolveAiProviderConfig({
+      aiProvider: "ollama",
+      openrouterApiKey: "or-key",
+      openaiApiKey: "sk-test"
+    });
+    assert.equal(runtime.provider, "openai");
+    assert.equal(runtime.localFallback, "ollama");
+    assert.equal(runtime.baseUrl, "http://127.0.0.1:11434/v1");
+  } finally {
+    process.env.WABA_OLLAMA_BASE_URL = prev.WABA_OLLAMA_BASE_URL;
+    process.env.OPENAI_BASE_URL = prev.OPENAI_BASE_URL;
+  }
+});
+
 test("chat completion: retries with lightweight Ollama fallback model when primary is missing", async () => {
   const prevFetch = global.fetch;
   const prev = {

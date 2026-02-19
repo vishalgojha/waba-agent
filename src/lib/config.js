@@ -90,6 +90,7 @@ async function getConfig() {
   cfg.openaiVisionModel = envOr(cfg.openaiVisionModel, ["WABA_OPENAI_VISION_MODEL"]);
   cfg.openaiTranscribeModel = envOr(cfg.openaiTranscribeModel, ["WABA_OPENAI_TRANSCRIBE_MODEL"]);
   cfg.aiProvider = envOr(cfg.aiProvider, ["WABA_AI_PROVIDER"]);
+  if (!cfg.aiProvider) cfg.aiProvider = "ollama";
 
   cfg.anthropicApiKey = envOr(cfg.anthropicApiKey, ["ANTHROPIC_API_KEY"]);
   cfg.anthropicBaseUrl = envOr(cfg.anthropicBaseUrl, ["ANTHROPIC_BASE_URL"]);

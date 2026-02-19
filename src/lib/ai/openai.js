@@ -96,6 +96,17 @@ function resolveAiProviderConfig(cfg = {}) {
 
   const providerHintRaw = cfg.aiProvider || process.env.WABA_AI_PROVIDER;
   const providerHint = String(providerHintRaw || "").trim().toLowerCase() || null;
+
+  // Explicit local override: if user picked ollama, force local OpenAI-compatible runtime.
+  if (providerHint === "ollama") {
+    return buildOllamaFallbackConfig({
+      cfg,
+      openaiBaseUrlInput,
+      openaiModelInput: openaiModel,
+      openaiApiKey
+    });
+  }
+
   let provider = normalizeProvider(providerHintRaw);
   if (!provider) {
     const hintedBase = String(openaiBaseUrl || "").toLowerCase();

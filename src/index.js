@@ -50,6 +50,7 @@ const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
 const { initObservability } = require("./lib/observability");
 const { shouldAutoStart } = require("./lib/cli-autostart");
+const { collectKnownCommandNames, resolveFriendlyCommand } = require("./lib/friendly-router");
 const { getConfig } = require("./lib/config");
 const { requireClientCreds } = require("./lib/creds");
 const { createHttpClient } = require("./lib/http");
@@ -215,7 +216,17 @@ async function main() {
     });
 
   const rawArgs = process.argv.slice(2);
-  const argv = shouldAutoStart(rawArgs) ? [...process.argv, "start"] : process.argv;
+  let argv = shouldAutoStart(rawArgs) ? [...process.argv, "start"] : process.argv;
+
+  if (!shouldAutoStart(rawArgs)) {
+    const known = collectKnownCommandNames(program);
+    const resolved = resolveFriendlyCommand(rawArgs, known);
+    if (resolved) {
+      logger.warn(`Interpreted '${resolved.original}' as '${resolved.target}'.`);
+      argv = [...process.argv.slice(0, 2), ...resolved.rewritten];
+    }
+  }
+
   await program.parseAsync(argv);
 }
 

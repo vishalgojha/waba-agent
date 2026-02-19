@@ -69,6 +69,14 @@ One-command smart flow (check first, then open assistant when ready):
 waba go
 ```
 
+Friendly command recovery is enabled for beginner verbs/typos.
+Examples:
+```bash
+waba chek
+waba launch assistant
+waba verify setup
+```
+
 This walks non-technical users through setup, chooses safe defaults, and can directly launch terminal hatch / chat / web dashboard.
 
 2) Save auth (token + IDs)

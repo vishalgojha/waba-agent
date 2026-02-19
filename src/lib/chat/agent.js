@@ -452,6 +452,7 @@ class WhatsAppAgent {
     if (tool === "lead.schedule_followup" && params.phone && !params.to) params.to = String(params.phone).replace(/[^\d]/g, "");
     if (tool === "lead.tag" && params.phone) params.phone = String(params.phone).replace(/[^\d]/g, "");
     if (tool === "lead.escalate_human" && params.phone) params.phone = String(params.phone).replace(/[^\d]/g, "");
+    if (tool === "jaspers.plan_reply" && params.from) params.from = String(params.from).replace(/[^\d]/g, "");
 
     const out = await this.runtimeCtx.registry.get(tool).execute(this.runtimeCtx, params);
     return {

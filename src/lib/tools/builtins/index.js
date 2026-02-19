@@ -14,6 +14,7 @@ const { toolSendTextButtons } = require("./tool-send-text-buttons");
 const { toolLeadScheduleFollowup } = require("./tool-lead-schedule-followup");
 const { toolLeadTag } = require("./tool-lead-tag");
 const { toolLeadEscalateHuman } = require("./tool-lead-escalate-human");
+const { toolJaspersPlanReply } = require("./tool-jaspers-plan-reply");
 
 function builtinTools() {
   return [
@@ -28,6 +29,7 @@ function builtinTools() {
     toolLeadScheduleFollowup(),
     toolLeadTag(),
     toolLeadEscalateHuman(),
+    toolJaspersPlanReply(),
     toolWebhookSetupHint(),
     toolWebhookValidate(),
     toolScheduleAddText(),

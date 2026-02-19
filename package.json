@@ -54,7 +54,7 @@
     "test:gateway": "node src/tests/gateway.test.js",
     "test:hatch": "node src/tests/hatch.test.js",
     "test:cli": "node src/tests/cli-autostart.test.js",
-    "test:start": "node src/tests/start.test.js && node src/tests/webhook-domain.test.js",
+    "test:start": "node src/tests/start.test.js && node src/tests/webhook-domain.test.js && node src/tests/jaspers-tool.test.js",
     "test:resale": "node src/tests/resale.test.js",
     "validate:prod": "node scripts/validate-production.js",
     "handoff:update": "node scripts/handoff-update.js",

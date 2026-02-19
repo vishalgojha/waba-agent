@@ -17,6 +17,7 @@ function toolCatalog({ resaleOnly = false } = {}) {
     "lead.schedule_followup(to, days, templateName?, language?, params?)",
     "lead.tag(phone, tag, note?)",
     "lead.escalate_human(phone, reason, priority?)",
+    "jaspers.plan_reply(from, text)",
     "template.list(limit)",
     "memory.show(client)"
   ];
@@ -25,7 +26,7 @@ function toolCatalog({ resaleOnly = false } = {}) {
 function responseSchema({ resaleOnly = false } = {}) {
   const tools = resaleOnly
     ? "template.send | message.send_text_buttons | lead.schedule_followup | lead.tag | lead.escalate_human"
-    : "message.send_text | message.send_text_buttons | template.send | schedule.add_text | schedule.add_template | lead.schedule_followup | lead.tag | lead.escalate_human | template.list | memory.show";
+    : "message.send_text | message.send_text_buttons | template.send | schedule.add_text | schedule.add_template | lead.schedule_followup | lead.tag | lead.escalate_human | jaspers.plan_reply | template.list | memory.show";
   return `{
   "message": "string",
   "actions": [

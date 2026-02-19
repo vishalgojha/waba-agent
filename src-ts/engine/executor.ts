@@ -11,6 +11,7 @@ function idempotencyKey(intent: Intent): string {
     action: intent.action,
     to: intent.payload.to,
     templateName: intent.payload.templateName,
+    body: intent.payload.body,
     phone: intent.phone_number_id
   });
   return crypto.createHash("sha256").update(raw).digest("hex").slice(0, 32);
@@ -28,6 +29,14 @@ export async function executeIntent(intent: Intent, cfg: AgentConfig): Promise<A
       const language = String(intent.payload.language || "en_US");
       if (!to || !templateName) throw new Error("send_template needs payload.to and payload.templateName");
       output = await api.sendTemplate(to, templateName, language, idempotencyKey(intent));
+      break;
+    }
+    case "send_text": {
+      const to = String(intent.payload.to || "");
+      const body = String(intent.payload.body || "");
+      const previewUrl = !!intent.payload.previewUrl;
+      if (!to || !body) throw new Error("send_text needs payload.to and payload.body");
+      output = await api.sendText(to, body, previewUrl, idempotencyKey(intent));
       break;
     }
     case "list_numbers":

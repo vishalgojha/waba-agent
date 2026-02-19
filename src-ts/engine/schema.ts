@@ -3,6 +3,7 @@ import type { ActionName, Intent, RiskLevel } from "../types.js";
 
 const ACTIONS = new Set<ActionName>([
   "send_template",
+  "send_text",
   "list_numbers",
   "create_template",
   "delete_template",
@@ -28,4 +29,3 @@ export function validateIntent(input: unknown): Intent {
   const payload = v.payload && typeof v.payload === "object" ? (v.payload as Record<string, unknown>) : {};
   return { action, business_id, phone_number_id, payload, risk };
 }
-

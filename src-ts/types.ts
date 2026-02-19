@@ -3,6 +3,7 @@ export type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 export type ActionName =
   | "send_template"
+  | "send_text"
   | "list_numbers"
   | "create_template"
   | "delete_template"
@@ -11,6 +12,8 @@ export type ActionName =
 
 export interface IntentPayload {
   to?: string;
+  body?: string;
+  previewUrl?: boolean;
   templateName?: string;
   language?: string;
   templateBody?: string;

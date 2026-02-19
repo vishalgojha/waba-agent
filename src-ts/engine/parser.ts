@@ -5,6 +5,7 @@ import { validateIntent } from "./schema.js";
 
 function pickAction(text: string): ActionName {
   const t = text.toLowerCase();
+  if (t.includes("send text")) return "send_text";
   if (t.includes("send")) return "send_template";
   if (t.includes("numbers")) return "list_numbers";
   if (t.includes("create template")) return "create_template";
@@ -37,4 +38,3 @@ export function parseIntent(text: string, defaults: { businessId: string; phoneN
 
   return validateIntent(intent);
 }
-

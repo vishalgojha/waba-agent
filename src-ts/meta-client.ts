@@ -83,6 +83,22 @@ export class MetaClient {
     });
   }
 
+  async sendText(to: string, body: string, previewUrl = false, idempotencyKey?: string): Promise<unknown> {
+    return this.request(`${this.cfg.phoneNumberId}/messages`, {
+      method: "POST",
+      headers: idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {},
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "text",
+        text: {
+          body,
+          preview_url: !!previewUrl
+        }
+      })
+    });
+  }
+
   async uploadMedia(fileName: string, mimeType: string, contentBase64: string): Promise<unknown> {
     return this.request(`${this.cfg.phoneNumberId}/media`, {
       method: "POST",

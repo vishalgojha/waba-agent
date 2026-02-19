@@ -3,6 +3,24 @@ const { WhatsAppCloudApi } = require("../lib/whatsapp");
 const { logger } = require("../lib/logger");
 const { isOptedOut } = require("../lib/optout-store");
 const { requireClientCreds } = require("../lib/creds");
+const fs = require("fs-extra");
+const path = require("path");
+const { pathToFileURL } = require("url");
+
+async function loadTsSendBridge() {
+  const root = path.resolve(__dirname, "..", "..");
+  const executorJs = path.join(root, ".tmp-ts", "src-ts", "engine", "executor.js");
+  const schemaJs = path.join(root, ".tmp-ts", "src-ts", "engine", "schema.js");
+  if (!(await fs.pathExists(executorJs)) || !(await fs.pathExists(schemaJs))) return null;
+
+  const execMod = await import(pathToFileURL(executorJs).href);
+  const schemaMod = await import(pathToFileURL(schemaJs).href);
+  if (!execMod?.executeIntent || !schemaMod?.validateIntent) return null;
+  return {
+    executeIntent: execMod.executeIntent,
+    validateIntent: schemaMod.validateIntent
+  };
+}
 
 function tryParseJson(s) {
   if (!s) return undefined;
@@ -32,20 +50,51 @@ function registerSendCommands(program) {
       if (await isOptedOut(creds.client, to)) {
         throw new Error("Recipient is opted out. Use `waba optout check <number>` to verify.");
       }
-      const api = new WhatsAppCloudApi({
-        token: creds.token,
-        phoneNumberId: creds.phoneNumberId,
-        wabaId: creds.wabaId,
-        graphVersion: cfg.graphVersion || "v20.0",
-        baseUrl: cfg.baseUrl
-      });
       logger.warn("Costs: per-message billed (India approx: ~INR 0.11 utility, ~INR 0.78 marketing; verify current rates in Meta).");
-      const data = await api.sendTemplate({
-        to,
-        templateName: opts.templateName,
-        language: opts.language,
-        params: tryParseJson(opts.params)
-      });
+      let data;
+      const params = tryParseJson(opts.params);
+      try {
+        const ts = await loadTsSendBridge();
+        if (ts) {
+          const intent = ts.validateIntent({
+            action: "send_template",
+            business_id: String(creds.wabaId || ""),
+            phone_number_id: String(creds.phoneNumberId || ""),
+            payload: {
+              to,
+              templateName: opts.templateName,
+              language: opts.language,
+              ...(params !== undefined ? { params } : {})
+            },
+            risk: "HIGH"
+          });
+          const out = await ts.executeIntent(intent, {
+            token: String(creds.token || ""),
+            businessId: String(creds.wabaId || ""),
+            phoneNumberId: String(creds.phoneNumberId || ""),
+            graphVersion: String(cfg.graphVersion || "v20.0"),
+            baseUrl: String(cfg.baseUrl || "https://graph.facebook.com")
+          });
+          data = out.output;
+        }
+      } catch (err) {
+        logger.warn(`TS send bridge unavailable for template, falling back to JS path: ${err?.message || err}`);
+      }
+      if (data === undefined) {
+        const api = new WhatsAppCloudApi({
+          token: creds.token,
+          phoneNumberId: creds.phoneNumberId,
+          wabaId: creds.wabaId,
+          graphVersion: cfg.graphVersion || "v20.0",
+          baseUrl: cfg.baseUrl
+        });
+        data = await api.sendTemplate({
+          to,
+          templateName: opts.templateName,
+          language: opts.language,
+          params
+        });
+      }
       // best-effort local analytics tagging
       try {
         const { appendMemory } = require("../lib/memory");
@@ -75,15 +124,44 @@ function registerSendCommands(program) {
       if (await isOptedOut(creds.client, to)) {
         throw new Error("Recipient is opted out. Use `waba optout check <number>` to verify.");
       }
-      const api = new WhatsAppCloudApi({
-        token: creds.token,
-        phoneNumberId: creds.phoneNumberId,
-        wabaId: creds.wabaId,
-        graphVersion: cfg.graphVersion || "v20.0",
-        baseUrl: cfg.baseUrl
-      });
       logger.warn("Costs: per-message billed (India approx: ~INR 0.11 utility, ~INR 0.78 marketing; verify current rates in Meta).");
-      const data = await api.sendText({ to, body: opts.body, previewUrl: !!opts.previewUrl });
+      let data;
+      try {
+        const ts = await loadTsSendBridge();
+        if (ts) {
+          const intent = ts.validateIntent({
+            action: "send_text",
+            business_id: String(creds.wabaId || ""),
+            phone_number_id: String(creds.phoneNumberId || ""),
+            payload: {
+              to,
+              body: String(opts.body || ""),
+              previewUrl: !!opts.previewUrl
+            },
+            risk: "HIGH"
+          });
+          const out = await ts.executeIntent(intent, {
+            token: String(creds.token || ""),
+            businessId: String(creds.wabaId || ""),
+            phoneNumberId: String(creds.phoneNumberId || ""),
+            graphVersion: String(cfg.graphVersion || "v20.0"),
+            baseUrl: String(cfg.baseUrl || "https://graph.facebook.com")
+          });
+          data = out.output;
+        }
+      } catch (err) {
+        logger.warn(`TS send bridge unavailable for text, falling back to JS path: ${err?.message || err}`);
+      }
+      if (data === undefined) {
+        const api = new WhatsAppCloudApi({
+          token: creds.token,
+          phoneNumberId: creds.phoneNumberId,
+          wabaId: creds.wabaId,
+          graphVersion: cfg.graphVersion || "v20.0",
+          baseUrl: cfg.baseUrl
+        });
+        data = await api.sendText({ to, body: opts.body, previewUrl: !!opts.previewUrl });
+      }
       try {
         const { appendMemory } = require("../lib/memory");
         await appendMemory(creds.client, { type: "outbound_sent", kind: "text", to, category: opts.category });

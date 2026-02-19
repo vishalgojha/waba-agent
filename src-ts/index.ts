@@ -12,6 +12,7 @@ import { getReplayById, listReplay } from "./replay.js";
 import { assertReplayIntentHasRequiredPayload } from "./replay-guard.js";
 import { shouldFailDoctorGate } from "./doctor-policy.js";
 import { addOrUpdateClient, listClients, removeClient, switchClient } from "./clients.js";
+import { setConfigValue, showConfig, unsetConfigValue } from "./config-edit.js";
 
 async function requireConfigured() {
   const cfg = await readConfig();
@@ -97,6 +98,54 @@ async function run() {
     if (p.opts().json) console.log(JSON.stringify(status, null, 2));
     else logConsole("INFO", JSON.stringify(status, null, 2));
   });
+
+  const config = p.command("config").description("inspect and update config");
+  config
+    .command("show")
+    .description("show effective config")
+    .action(async () => {
+      const out = await showConfig();
+      if (p.opts().json) {
+        console.log(JSON.stringify({ ok: true, ...out }, null, 2));
+        return;
+      }
+      logConsole("INFO", `Config path: ${out.path}`);
+      logConsole("INFO", `Active client: ${String(out.config.activeClient || "default")}`);
+      logConsole(
+        "INFO",
+        `Graph: ${String(out.config.baseUrl || "https://graph.facebook.com")}/${String(out.config.graphVersion || "v20.0")}`
+      );
+      logConsole("INFO", `Token: ${String(out.config.token || "(missing)")}`);
+      logConsole("INFO", `Phone ID: ${String(out.config.phoneNumberId || "(missing)")}`);
+      logConsole("INFO", `WABA ID: ${String(out.config.wabaId || "(missing)")}`);
+      const clientsObj = out.config.clients && typeof out.config.clients === "object" ? out.config.clients : {};
+      logConsole("INFO", `Clients: ${Object.keys(clientsObj).sort().join(", ") || "(none)"}`);
+    });
+
+  config
+    .command("set")
+    .description("set a config value (supports dot-path)")
+    .argument("<key>", "key path")
+    .argument("<value>", "value")
+    .option("--client <name>", "set on a specific client")
+    .action(async (key, value, opts) => {
+      const out = await setConfigValue(String(key), value, opts.client ? String(opts.client) : undefined);
+      logConsole("INFO", `Updated ${out.scopedKey} in ${out.path}`);
+    });
+
+  config
+    .command("unset")
+    .description("remove a config value (supports dot-path)")
+    .argument("<key>", "key path")
+    .option("--client <name>", "unset on a specific client")
+    .action(async (key, opts) => {
+      const out = await unsetConfigValue(String(key), opts.client ? String(opts.client) : undefined);
+      if (!out.removed) {
+        logConsole("WARN", "Key not found. No change made.");
+        return;
+      }
+      logConsole("INFO", `Removed ${out.scopedKey} from ${out.path}`);
+    });
 
   p.command("profile").action(async () => {
     const cfg = await requireConfigured();

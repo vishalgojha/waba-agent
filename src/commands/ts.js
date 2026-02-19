@@ -8,6 +8,7 @@ const {
   loadTsReplayBridge,
   loadTsTuiBridge,
   loadTsClientsBridge,
+  loadTsConfigEditBridge,
   buildTsAgentConfigFromCreds
 } = require("../lib/ts-bridge");
 
@@ -206,6 +207,41 @@ async function runTsClientsRemove({ name } = {}) {
   logger.info(`Config: ${res.path}`);
 }
 
+async function runTsConfigShow({ json = false } = {}) {
+  const bridge = await loadTsConfigEditBridge();
+  if (!bridge) throw new Error("TypeScript config runtime is unavailable. Run: npm.cmd run build:ts:tmp");
+  const out = await bridge.showConfig();
+  if (json) {
+    console.log(JSON.stringify({ ok: true, ...out }, null, 2));
+    return;
+  }
+  logger.info(`Config path: ${out.path}`);
+  logger.info(`Active client: ${out.config.activeClient || "default"}`);
+  logger.info(`Graph: ${out.config.baseUrl || "https://graph.facebook.com"}/${out.config.graphVersion || "v20.0"}`);
+  logger.info(`Token: ${out.config.token || "(missing)"}`);
+  logger.info(`Phone ID: ${out.config.phoneNumberId || "(missing)"}`);
+  logger.info(`WABA ID: ${out.config.wabaId || "(missing)"}`);
+  logger.info(`Clients: ${Object.keys(out.config.clients || {}).sort().join(", ") || "(none)"}`);
+}
+
+async function runTsConfigSet({ key, value, client } = {}) {
+  const bridge = await loadTsConfigEditBridge();
+  if (!bridge) throw new Error("TypeScript config runtime is unavailable. Run: npm.cmd run build:ts:tmp");
+  const out = await bridge.setConfigValue(String(key || ""), value, client ? String(client) : undefined);
+  logger.ok(`Updated ${out.scopedKey} in ${out.path}`);
+}
+
+async function runTsConfigUnset({ key, client } = {}) {
+  const bridge = await loadTsConfigEditBridge();
+  if (!bridge) throw new Error("TypeScript config runtime is unavailable. Run: npm.cmd run build:ts:tmp");
+  const out = await bridge.unsetConfigValue(String(key || ""), client ? String(client) : undefined);
+  if (!out.removed) {
+    logger.warn("Key not found. No change made.");
+    return;
+  }
+  logger.ok(`Removed ${out.scopedKey} from ${out.path}`);
+}
+
 function registerTsCommands(program) {
   const t = program.command("ts").description("TypeScript control-plane runtime (migration path)");
 
@@ -312,6 +348,30 @@ function registerTsCommands(program) {
     .action(async (name) => {
       await runTsClientsRemove({ name });
     });
+
+  const cfg = t.command("config").description("run TS config commands");
+  cfg.command("show")
+    .description("show effective config")
+    .action(async (_opts, cmd) => {
+      const root = cmd.parent?.parent?.parent || program;
+      const { json } = root.opts();
+      await runTsConfigShow({ json });
+    });
+  cfg.command("set")
+    .description("set a config value (supports dot-path)")
+    .argument("<key>", "key path")
+    .argument("<value>", "value")
+    .option("--client <name>", "set on specific client")
+    .action(async (key, value, opts) => {
+      await runTsConfigSet({ key, value, client: opts.client });
+    });
+  cfg.command("unset")
+    .description("remove a config value (supports dot-path)")
+    .argument("<key>", "key path")
+    .option("--client <name>", "unset on specific client")
+    .action(async (key, opts) => {
+      await runTsConfigUnset({ key, client: opts.client });
+    });
 }
 
 module.exports = {
@@ -327,5 +387,8 @@ module.exports = {
   runTsClientsList,
   runTsClientsAdd,
   runTsClientsSwitch,
-  runTsClientsRemove
+  runTsClientsRemove,
+  runTsConfigShow,
+  runTsConfigSet,
+  runTsConfigUnset
 };

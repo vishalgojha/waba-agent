@@ -84,6 +84,16 @@ async function loadTsClientsBridge() {
   };
 }
 
+async function loadTsConfigEditBridge() {
+  const mod = await loadTsModule("config-edit.js");
+  if (!mod?.showConfig || !mod?.setConfigValue || !mod?.unsetConfigValue) return null;
+  return {
+    showConfig: mod.showConfig,
+    setConfigValue: mod.setConfigValue,
+    unsetConfigValue: mod.unsetConfigValue
+  };
+}
+
 function buildTsAgentConfigFromCreds(cfg, creds) {
   return {
     token: String(creds?.token || ""),
@@ -103,5 +113,6 @@ module.exports = {
   loadTsReplayBridge,
   loadTsTuiBridge,
   loadTsClientsBridge,
+  loadTsConfigEditBridge,
   buildTsAgentConfigFromCreds
 };

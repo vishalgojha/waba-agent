@@ -15,10 +15,10 @@ function tryParseJson(s) {
 }
 
 function registerSendCommands(program) {
-  const s = program.command("send").description("send outbound messages (costs money)");
+  const s = program.command("send").description("send outbound messages (legacy command path; TS bridge preferred)");
 
   s.command("template")
-    .description("send a pre-approved template message")
+    .description("send a pre-approved template message (legacy UX; TS executor preferred)")
     .argument("<to_number>", "E.164 without + (example: 9198xxxxxx)")
     .requiredOption("--template-name <name>", "template name")
     .requiredOption("--language <code>", "language code (example: en)")
@@ -30,6 +30,7 @@ function registerSendCommands(program) {
       const { json } = root.opts();
       const cfg = await getConfig();
       const creds = requireClientCreds(cfg, opts.client);
+      logger.warn("Migration note: `waba send template` is on a legacy command path and now routes through TS executor when available.");
       if (await isOptedOut(creds.client, to)) {
         throw new Error("Recipient is opted out. Use `waba optout check <number>` to verify.");
       }
@@ -87,7 +88,7 @@ function registerSendCommands(program) {
     });
 
   s.command("text")
-    .description("send a text message (session/outbound rules apply)")
+    .description("send a text message (legacy UX; TS executor preferred)")
     .argument("<to_number>", "E.164 without + (example: 9198xxxxxx)")
     .requiredOption("--body <text>", "text body")
     .option("--category <utility|marketing>", "category tag for local analytics (does not affect Meta)", "utility")
@@ -98,6 +99,7 @@ function registerSendCommands(program) {
       const { json } = root.opts();
       const cfg = await getConfig();
       const creds = requireClientCreds(cfg, opts.client);
+      logger.warn("Migration note: `waba send text` is on a legacy command path and now routes through TS executor when available.");
       if (await isOptedOut(creds.client, to)) {
         throw new Error("Recipient is opted out. Use `waba optout check <number>` to verify.");
       }

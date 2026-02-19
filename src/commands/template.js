@@ -147,7 +147,7 @@ function registerTemplateCommands(program) {
   const t = program.command("template").description("manage message templates");
 
   t.command("list")
-    .description("list message templates (requires business/WABA ID)")
+    .description("list message templates (legacy route; prefer `waba ts templates`)")
     .option("--limit <n>", "limit", (v) => Number(v), 50)
     .option("--client <name>", "client name (default: active client)")
     .action(async (opts, cmd) => {

@@ -1,4 +1,7 @@
 const crypto = require("crypto");
+const fs = require("fs-extra");
+const path = require("path");
+const { pathToFileURL } = require("url");
 
 const { getConfig, setConfig } = require("../lib/config");
 const { addOrUpdateClient, safeClientName, switchClient } = require("../lib/clients");
@@ -7,6 +10,15 @@ const { logger } = require("../lib/logger");
 
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
 const DEFAULT_OLLAMA_MODEL = "deepseek-coder-v2:16b";
+
+async function loadTsConfigBridge() {
+  const root = path.resolve(__dirname, "..", "..");
+  const configJs = path.join(root, ".tmp-ts", "src-ts", "config.js");
+  if (!(await fs.pathExists(configJs))) return null;
+  const mod = await import(pathToFileURL(configJs).href);
+  if (!mod?.readConfig || !mod?.writeConfig) return null;
+  return { readConfig: mod.readConfig, writeConfig: mod.writeConfig };
+}
 
 function base64url(buf) {
   return Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -117,6 +129,27 @@ function registerSetupCommands(program) {
       if (Object.keys(aiPatch).length) {
         await setConfig(aiPatch);
         changes.push("ai_config");
+      }
+
+      // TS migration bridge: keep canonical auth/webhook fields in sync when setup updates them.
+      if (wantsClientWrite || opts.verifyToken || opts.generateVerifyToken) {
+        try {
+          const ts = await loadTsConfigBridge();
+          if (ts) {
+            const fresh = await getConfig();
+            const active = fresh.clients?.[client] || {};
+            await ts.writeConfig({
+              token: String(active.token || fresh.token || ""),
+              phoneNumberId: String(active.phoneNumberId || fresh.phoneNumberId || ""),
+              businessId: String(active.wabaId || fresh.wabaId || ""),
+              webhookVerifyToken: fresh.webhookVerifyToken ? String(fresh.webhookVerifyToken) : undefined,
+              graphVersion: String(fresh.graphVersion || "v20.0"),
+              baseUrl: String(fresh.baseUrl || "https://graph.facebook.com")
+            });
+          }
+        } catch (err) {
+          logger.warn(`TS setup bridge unavailable, continuing with legacy config: ${err?.message || err}`);
+        }
       }
 
       const latest = await getConfig();

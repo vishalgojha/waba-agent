@@ -3,6 +3,18 @@ const { configPath } = require("../lib/paths");
 const { logger } = require("../lib/logger");
 const { safeClientName } = require("../lib/clients");
 const { redactToken } = require("../lib/redact");
+const fs = require("fs-extra");
+const path = require("path");
+const { pathToFileURL } = require("url");
+
+async function loadTsConfigBridge() {
+  const root = path.resolve(__dirname, "..", "..");
+  const configJs = path.join(root, ".tmp-ts", "src-ts", "config.js");
+  if (!(await fs.pathExists(configJs))) return null;
+  const mod = await import(pathToFileURL(configJs).href);
+  if (!mod?.readConfig) return null;
+  return { readConfig: mod.readConfig };
+}
 
 function parseConfigValue(raw) {
   const s = String(raw ?? "").trim();
@@ -72,7 +84,26 @@ function registerConfigCommands(program) {
     .action(async (_opts, cmd) => {
       const root = cmd.parent?.parent || program;
       const { json } = root.opts();
-      const effective = await getConfig();
+      let effective = await getConfig();
+      try {
+        const ts = await loadTsConfigBridge();
+        if (ts) {
+          const tcfg = await ts.readConfig();
+          effective = {
+            ...effective,
+            token: tcfg.token || effective.token,
+            phoneNumberId: tcfg.phoneNumberId || effective.phoneNumberId,
+            wabaId: tcfg.businessId || effective.wabaId,
+            businessId: tcfg.businessId || effective.businessId,
+            graphVersion: tcfg.graphVersion || effective.graphVersion,
+            baseUrl: tcfg.baseUrl || effective.baseUrl,
+            webhookVerifyToken: tcfg.webhookVerifyToken || effective.webhookVerifyToken,
+            webhookUrl: tcfg.webhookUrl || effective.webhookUrl
+          };
+        }
+      } catch (err) {
+        logger.warn(`TS config bridge unavailable, falling back to legacy config: ${err?.message || err}`);
+      }
       const redacted = redactConfigForDisplay(effective);
       if (json) {
         // eslint-disable-next-line no-console

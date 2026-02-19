@@ -298,12 +298,11 @@ function registerStartCommands(program) {
   program
     .command("go")
     .description("quick check, then auto-open start assistant when ready")
-    .option("--strict", "run strict scope checks", false)
-    .action(async (opts, cmd) => {
+    .action(async (_opts, cmd) => {
       const root = cmd.parent || program;
       const out = await runGuidedDemo({
         autoFix: true,
-        scopeCheckMode: opts.strict ? "strict" : "best-effort"
+        scopeCheckMode: "best-effort"
       });
 
       if (out.ok) {

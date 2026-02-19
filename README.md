@@ -56,6 +56,14 @@ Before anything else, run one simple readiness command:
 waba check
 ```
 
+Equivalent beginner aliases (same behavior):
+```bash
+waba health
+waba ready
+waba verify
+waba test
+```
+
 One-command smart flow (check first, then open assistant when ready):
 ```bash
 waba go

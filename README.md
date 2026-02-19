@@ -144,6 +144,22 @@ npm run start:ts -- replay-list --limit 20
 npm run start:ts -- replay <id> --dry-run
 npm run start:ts -- replay <id>
 
+### Non-Technical Smoke Test
+
+Run one command before demos:
+```bash
+waba demo smoke
+```
+
+This prints plain `PASS`/`FAIL` checks for:
+- Meta credentials readiness
+- webhook verify token presence
+- TS runtime/build bridges
+- Hatch bridge presence
+- Jaspers playbook planner output
+- agent tool wiring (`jaspers.plan_reply`)
+- CI workflow file presence
+
 ### Jaspers Market Playbook (Domain Integration)
 
 Smart integration inspired by Meta's `whatsapp-business-jaspers-market` sample, adapted to this control-plane architecture:

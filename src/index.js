@@ -35,6 +35,7 @@ const { registerStartCommands } = require("./commands/start");
 const { registerConfigCommands } = require("./commands/config");
 const { registerSetupCommands } = require("./commands/setup");
 const { registerStatusCommands } = require("./commands/status");
+const { registerDemoCommands } = require("./commands/demo");
 const {
   registerTsCommands,
   runTsDoctor,
@@ -123,6 +124,7 @@ async function main() {
   registerConfigCommands(program);
   registerSetupCommands(program);
   registerStatusCommands(program);
+  registerDemoCommands(program);
   registerTsCommands(program);
 
   program

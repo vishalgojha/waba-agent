@@ -1,4 +1,6 @@
 const fs = require("fs-extra");
+const path = require("path");
+const { pathToFileURL } = require("url");
 
 const { getConfig } = require("./config");
 const { resolveAiProviderConfig } = require("./ai/openai");
@@ -6,7 +8,61 @@ const { configPath, wabaHome } = require("./paths");
 const { redactToken } = require("./redact");
 const { logger } = require("./logger");
 
-async function doctor({ json = false } = {}) {
+async function loadTsDoctorBridge() {
+  const root = path.resolve(__dirname, "..", "..");
+  const doctorJs = path.join(root, ".tmp-ts", "src-ts", "doctor.js");
+  const configJs = path.join(root, ".tmp-ts", "src-ts", "config.js");
+  const policyJs = path.join(root, ".tmp-ts", "src-ts", "doctor-policy.js");
+
+  const hasAll = (await fs.pathExists(doctorJs)) && (await fs.pathExists(configJs)) && (await fs.pathExists(policyJs));
+  if (!hasAll) return null;
+
+  const doctorMod = await import(pathToFileURL(doctorJs).href);
+  const configMod = await import(pathToFileURL(configJs).href);
+  const policyMod = await import(pathToFileURL(policyJs).href);
+  if (!doctorMod?.runDoctor || !configMod?.readConfig || !policyMod?.shouldFailDoctorGate) return null;
+
+  return {
+    runDoctor: doctorMod.runDoctor,
+    readConfig: configMod.readConfig,
+    shouldFailDoctorGate: policyMod.shouldFailDoctorGate
+  };
+}
+
+function printDoctorReport(report, gateFail, json) {
+  if (json) {
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
+  logger.info(`Doctor overall: ${report.overall}${gateFail ? " (gate-fail)" : ""}`);
+  logger.info(`- token_validity: ${report.tokenValidity.ok ? "OK" : "FAIL"} | ${report.tokenValidity.detail}`);
+  logger.info(`- required_scopes: ${report.requiredScopes.ok ? "OK" : "FAIL"} | ${report.requiredScopes.detail}`);
+  logger.info(`- phone_access: ${report.phoneAccess.ok ? "OK" : "FAIL"} | ${report.phoneAccess.detail}`);
+  logger.info(`- webhook_connectivity: ${report.webhookConnectivity.ok ? "OK" : "FAIL"} | ${report.webhookConnectivity.detail}`);
+  logger.info(`- test_send_capability: ${report.testSendCapability.ok ? "OK" : "FAIL"} | ${report.testSendCapability.detail}`);
+  logger.info(`- rate_limits: ${report.rateLimits.ok ? "OK" : "FAIL"} | ${report.rateLimits.detail}`);
+}
+
+async function doctor({ json = false, scopeCheckMode = "best-effort", failOnWarn = false } = {}) {
+
+  // Preferred path during migration: use TypeScript doctor engine in-process.
+  try {
+    const ts = await loadTsDoctorBridge();
+    if (ts) {
+      const cfg = await ts.readConfig();
+      const report = await ts.runDoctor(cfg, { scopeCheckMode });
+      const gateFail = failOnWarn ? ts.shouldFailDoctorGate(report, true) : false;
+      printDoctorReport(report, gateFail, json);
+      if (gateFail) throw new Error(`Doctor gate failed: overall=${report.overall}`);
+      return;
+    }
+  } catch (err) {
+    logger.warn(`TS doctor bridge unavailable, falling back to legacy doctor: ${err?.message || err}`);
+  }
+
+  // Legacy fallback path.
   const cfg = await getConfig();
   const ai = resolveAiProviderConfig(cfg);
   const result = {

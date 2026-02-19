@@ -116,9 +116,15 @@ async function main() {
   program
     .command("doctor")
     .description("check local setup and auth")
-    .action(async () => {
+    .option("--scope-check-mode <mode>", "strict|best-effort", "best-effort")
+    .option("--fail-on-warn", "exit non-zero when report overall is WARN", false)
+    .action(async (opts) => {
       const { doctor } = require("./lib/doctor");
-      await doctor({ json: program.opts().json });
+      await doctor({
+        json: program.opts().json,
+        scopeCheckMode: String(opts.scopeCheckMode || "best-effort"),
+        failOnWarn: !!opts.failOnWarn
+      });
     });
 
   const rawArgs = process.argv.slice(2);

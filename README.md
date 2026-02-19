@@ -69,6 +69,11 @@ One-command smart flow (check first, then open assistant when ready):
 waba go
 ```
 
+Guided fixer (simple yes/no prompts, no flags):
+```bash
+waba fix
+```
+
 Friendly command recovery is enabled for beginner verbs/typos.
 Examples:
 ```bash

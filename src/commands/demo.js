@@ -26,7 +26,7 @@ async function runSmokeChecks() {
     readiness.metaReady,
     readiness.metaReady
       ? "token + phone id + business id detected"
-      : "missing credentials. run: waba login --token ... --phone-id ... --business-id ..."
+      : "missing credentials. run: waba start"
   );
 
   add(
@@ -34,7 +34,7 @@ async function runSmokeChecks() {
     readiness.webhookReady,
     readiness.webhookReady
       ? "verify token is configured"
-      : "missing verify token. run: waba setup --generate-verify-token"
+      : "missing verify token. run: waba start"
   );
 
   const tsConfig = await loadTsConfigBridge();
@@ -118,24 +118,24 @@ async function generateDemoNextSteps() {
 
   if (!readiness.metaReady) {
     pushStep(
-      "Connect Meta credentials",
-      'waba auth login --token "<PERMANENT_TOKEN>" --phone-id "<PHONE_NUMBER_ID>" --business-id "<WABA_ID>"',
-      "required before any real WhatsApp API call"
+      "Open guided setup",
+      "waba start",
+      "beginner flow to connect Meta credentials safely"
     );
   }
 
   if (!readiness.webhookReady) {
     pushStep(
-      "Set webhook verify token",
-      "waba setup --generate-verify-token",
-      "required for webhook verification and inbound flow"
+      "Generate missing webhook token",
+      "waba start",
+      "guided setup creates webhook verify token automatically"
     );
   }
 
   pushStep(
-    "Run health gate",
-    "waba doctor --scope-check-mode strict",
-    "verifies token, scopes, phone access, webhook reachability and test capability"
+    "Run quick readiness",
+    "waba check",
+    "one-command beginner readiness report"
   );
 
   pushStep(
@@ -152,10 +152,19 @@ async function generateDemoNextSteps() {
 
   if (readiness.overallReady) {
     pushStep(
-      "Open agentic Hatch UI",
-      "npm run hatch:ts",
-      "chat-first operator cockpit with approvals and replay"
+      "Open assistant directly",
+      "waba go",
+      "auto-check and start assistant when ready"
     );
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  for (const step of steps) {
+    const key = String(step.command || "").trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push({ ...step, id: deduped.length + 1 });
   }
 
   return {
@@ -164,7 +173,7 @@ async function generateDemoNextSteps() {
     metaReady: readiness.metaReady,
     webhookReady: readiness.webhookReady,
     overallReady: readiness.overallReady,
-    steps
+    steps: deduped
   };
 }
 

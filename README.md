@@ -51,6 +51,11 @@ waba start
 
 Shortcut: just run `waba` with no subcommand in an interactive terminal and it opens this assistant.
 
+Before anything else, run one simple readiness command:
+```bash
+waba check
+```
+
 This walks non-technical users through setup, chooses safe defaults, and can directly launch terminal hatch / chat / web dashboard.
 
 2) Save auth (token + IDs)

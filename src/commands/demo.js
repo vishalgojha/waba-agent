@@ -180,9 +180,13 @@ async function runGuidedDemo({ autoFix = false, scopeCheckMode = "best-effort" }
   const beforeReadiness = buildReadiness(beforeCfg, {});
 
   if (autoFix && !beforeReadiness.webhookReady) {
-    const token = base64url(crypto.randomBytes(24));
-    await setConfig({ webhookVerifyToken: token });
-    actions.push("generated_webhook_verify_token");
+    try {
+      const token = base64url(crypto.randomBytes(24));
+      await setConfig({ webhookVerifyToken: token });
+      actions.push("generated_webhook_verify_token");
+    } catch (err) {
+      warnings.push(`auto-fix skipped: unable to write webhook verify token (${err?.message || err})`);
+    }
   }
 
   const smoke = await runSmokeChecks();

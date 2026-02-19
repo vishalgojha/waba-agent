@@ -254,6 +254,12 @@ function registerStartCommands(program) {
       logger.info(`Meta credentials: ${status.metaReady ? "ready" : "missing"}`);
       logger.info(`AI mode: ${status.aiMode}${status.aiReady ? "" : " (missing key/model)"}`);
       logger.info(`Webhook verify token: ${status.webhookReady ? "set" : "missing"}`);
+      if (!status.metaReady || !status.webhookReady) {
+        logger.info("What to run first:");
+        logger.info("1. waba check");
+        logger.info("2. waba fix");
+        logger.info("3. waba go");
+      }
 
       const wantsMetaSetup = !status.metaReady
         ? await prompter.confirm({ message: "Set up Meta credentials now?", initialValue: true })
@@ -285,6 +291,7 @@ function registerStartCommands(program) {
 
   program
     .command("start")
+    .alias("hi")
     .description("friendly non-technical setup + launch assistant")
     .option("--client <name>", "client context (default: active client or 'default')")
     .option("--lang <lang>", "assistant language en|hi", "en")

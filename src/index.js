@@ -140,6 +140,7 @@ async function main() {
     .option("--scope-check-mode <mode>", "strict|best-effort", "best-effort")
     .option("--fail-on-warn", "exit non-zero when report overall is WARN", false)
     .action(async (opts) => {
+      logger.info("Beginner tip: use `waba check` for simple setup guidance.");
       logger.warn("Deprecated path: `waba doctor` now routes to `waba ts doctor`. Use `waba ts doctor` directly.");
       try {
         await runTsDoctor({

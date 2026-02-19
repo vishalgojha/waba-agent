@@ -23,11 +23,17 @@ Use these first (no flags needed):
 - `waba fix`: guided yes/no fixer
 - `waba go`: check first, then open assistant when ready
 - `waba start`: full guided setup + launch flow
+- `waba hi`: same as `waba start`
 - `waba panic`: safe reset for local config issues (keeps client credentials)
 
 Friendly recovery is enabled for typos and natural verbs:
 - `waba chek` -> `waba check`
 - `waba launch assistant` -> `waba go`
+
+First-time order:
+1. `waba check`
+2. `waba fix`
+3. `waba go`
 
 ## Install
 

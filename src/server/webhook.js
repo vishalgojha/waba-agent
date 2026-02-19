@@ -15,6 +15,7 @@ const { safeName } = require("../lib/memory");
 const { addOptout, isOptedOut } = require("../lib/optout-store");
 const { handleInboundWithFlow } = require("../lib/flow-engine");
 const { getClientConfig } = require("../lib/client-config");
+const { loadTsJaspersBridge } = require("../lib/ts-bridge");
 const { hasAnyCrm, pushLeadToCrm } = require("../lib/crm");
 const { getLastInboundAt, in24hWindow } = require("../lib/session-window");
 const { initObservability } = require("../lib/observability");
@@ -157,6 +158,10 @@ function buildStaffNotifyText({ client, from, intent, fields, text, reason }) {
   return lines.join("\n");
 }
 
+function isJaspersDomainEnabled(clientCfg) {
+  return clientCfg?.domain?.vertical === "jaspers-market" && clientCfg?.domain?.jaspers?.enabled === true;
+}
+
 async function startWebhookServer({
   host = "127.0.0.1",
   port = 3000,
@@ -176,6 +181,7 @@ async function startWebhookServer({
   if (!verifyToken) logger.warn("Missing verify token (WABA_VERIFY_TOKEN or saved config). GET verification may fail.");
 
   const ctx = await createAgentContext({ client, memoryEnabled });
+  let tsJaspersBridge = null;
 
   // In-memory cache (per process) for quick 24h checks; fallback to memory.jsonl when missing.
   const lastInboundByFrom = new Map(); // from -> ISO
@@ -340,10 +346,47 @@ async function startWebhookServer({
             clientCfg?.flows?.intentMap?.[intent] ||
             clientCfg?.flows?.active ||
             null;
+          const jaspersEnabled = isJaspersDomainEnabled(clientCfg);
 
           let steps = null;
           let flowRes = null;
-          if (callRequest) {
+          if (jaspersEnabled && textForIntent) {
+            try {
+              if (!tsJaspersBridge) tsJaspersBridge = await loadTsJaspersBridge();
+              if (tsJaspersBridge?.planMarketReply && tsJaspersBridge?.saveMarketSession && tsJaspersBridge?.getMarketSession) {
+                const prevSession = await tsJaspersBridge.getMarketSession(from);
+                const plan = tsJaspersBridge.planMarketReply(textForIntent, from, prevSession || null);
+                await tsJaspersBridge.saveMarketSession(plan.nextSession);
+                intent = "order_intent";
+                replyOverride = plan.replyText || replyOverride;
+                steps = [
+                  {
+                    tool: "memory.note",
+                    args: {
+                      client: ctx.client,
+                      text: `Jaspers plan stage=${plan.stage} from=${redactPhone(from)} intent=${intent}`
+                    },
+                    reason: "Record domain flow progression."
+                  }
+                ];
+                if (sessionOpen) {
+                  steps.push({
+                    tool: "message.send_text",
+                    args: { to: from, body: plan.replyText || "Please share occasion and budget.", category: "utility" },
+                    reason: "Domain reply in 24h service window."
+                  });
+                } else {
+                  steps.push({
+                    tool: "memory.note",
+                    args: { client: ctx.client, text: "Jaspers flow produced response but session closed; skipped outbound text." },
+                    reason: "Avoid violating WhatsApp outbound rules."
+                  });
+                }
+              }
+            } catch (err) {
+              logger.warn(`jaspers webhook route failed, falling back to default flow: ${err?.message || err}`);
+            }
+          } else if (callRequest) {
             // Force human handoff.
             flowRes = {
               ok: true,

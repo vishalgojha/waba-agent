@@ -1,5 +1,7 @@
 const { logger } = require("../lib/logger");
 const { requireClientCreds } = require("../lib/creds");
+const { safeName } = require("../lib/memory");
+const { getClientConfig, setClientConfig } = require("../lib/client-config");
 const {
   loadTsConfigBridge,
   loadTsDoctorBridge,
@@ -296,6 +298,34 @@ async function runTsJaspersHandle({ phone, text, json = false, dryRun = false } 
   logger.info(plan.replyText);
 }
 
+async function runTsJaspersStatus({ client = "default", json = false } = {}) {
+  const c = safeName(client || "default");
+  const cfg = (await getClientConfig(c)) || {};
+  const enabled = cfg?.domain?.vertical === "jaspers-market" && cfg?.domain?.jaspers?.enabled === true;
+  const out = {
+    client: c,
+    enabled,
+    domain: cfg?.domain || null
+  };
+  if (json) {
+    console.log(JSON.stringify({ ok: true, ...out }, null, 2));
+    return;
+  }
+  logger.info(`client=${c} enabled=${enabled ? "yes" : "no"}`);
+}
+
+async function runTsJaspersEnable({ client = "default", enabled = true } = {}) {
+  const c = safeName(client || "default");
+  const out = await setClientConfig(c, {
+    domain: {
+      vertical: "jaspers-market",
+      jaspers: { enabled: !!enabled }
+    }
+  });
+  logger.ok(`Jaspers ${enabled ? "enabled" : "disabled"} for client '${c}'`);
+  logger.info(`Client config: ${out.path}`);
+}
+
 function registerTsCommands(program) {
   const t = program.command("ts").description("TypeScript control-plane runtime (migration path)");
 
@@ -466,6 +496,36 @@ function registerTsCommands(program) {
       const { json } = root.opts();
       await runTsJaspersHandle({ phone: opts.from, text: opts.text, json, dryRun: !!opts.dryRun });
     });
+  j.command("webhook-handle")
+    .description("alias of handle for webhook adapter usage")
+    .requiredOption("--from <phone>", "sender phone")
+    .requiredOption("--text <text>", "incoming text")
+    .option("--dry-run", "plan only, do not send to Meta", false)
+    .action(async (opts, cmd) => {
+      const root = cmd.parent?.parent?.parent || program;
+      const { json } = root.opts();
+      await runTsJaspersHandle({ phone: opts.from, text: opts.text, json, dryRun: !!opts.dryRun });
+    });
+  j.command("status")
+    .description("show per-client jaspers domain toggle")
+    .option("--client <name>", "client name", "default")
+    .action(async (opts, cmd) => {
+      const root = cmd.parent?.parent?.parent || program;
+      const { json } = root.opts();
+      await runTsJaspersStatus({ client: opts.client, json });
+    });
+  j.command("enable")
+    .description("enable jaspers playbook for a client webhook")
+    .option("--client <name>", "client name", "default")
+    .action(async (opts) => {
+      await runTsJaspersEnable({ client: opts.client, enabled: true });
+    });
+  j.command("disable")
+    .description("disable jaspers playbook for a client webhook")
+    .option("--client <name>", "client name", "default")
+    .action(async (opts) => {
+      await runTsJaspersEnable({ client: opts.client, enabled: false });
+    });
 }
 
 module.exports = {
@@ -486,5 +546,7 @@ module.exports = {
   runTsConfigSet,
   runTsConfigUnset,
   runTsJaspersCatalog,
-  runTsJaspersHandle
+  runTsJaspersHandle,
+  runTsJaspersStatus,
+  runTsJaspersEnable
 };

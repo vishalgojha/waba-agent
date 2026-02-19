@@ -162,6 +162,10 @@ function isJaspersDomainEnabled(clientCfg) {
   return clientCfg?.domain?.vertical === "jaspers-market" && clientCfg?.domain?.jaspers?.enabled === true;
 }
 
+function mapJaspersPlanRiskToOverall(planRisk) {
+  return String(planRisk || "").toUpperCase() === "HIGH" ? "high" : "medium";
+}
+
 async function startWebhookServer({
   host = "127.0.0.1",
   port = 3000,
@@ -360,7 +364,7 @@ async function startWebhookServer({
                 await tsJaspersBridge.saveMarketSession(plan.nextSession);
                 intent = "order_intent";
                 replyOverride = plan.replyText || replyOverride;
-                domainOverallRisk = String(plan.risk || "").toUpperCase() === "HIGH" ? "high" : "medium";
+                domainOverallRisk = mapJaspersPlanRiskToOverall(plan.risk);
                 steps = [
                   {
                     tool: "memory.note",
@@ -570,4 +574,4 @@ async function startWebhookServer({
   return { server, publicUrl };
 }
 
-module.exports = { startWebhookServer };
+module.exports = { startWebhookServer, isJaspersDomainEnabled, mapJaspersPlanRiskToOverall };

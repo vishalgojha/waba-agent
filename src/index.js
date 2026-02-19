@@ -38,6 +38,7 @@ const { registerStatusCommands } = require("./commands/status");
 const { registerDemoCommands } = require("./commands/demo");
 const { registerCheckCommands } = require("./commands/check");
 const { registerFixCommands } = require("./commands/fix");
+const { registerPanicCommands } = require("./commands/panic");
 const {
   registerTsCommands,
   runTsDoctor,
@@ -130,6 +131,7 @@ async function main() {
   registerDemoCommands(program);
   registerCheckCommands(program);
   registerFixCommands(program);
+  registerPanicCommands(program);
   registerTsCommands(program);
 
   program

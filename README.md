@@ -23,6 +23,7 @@ Use these first (no flags needed):
 - `waba fix`: guided yes/no fixer
 - `waba go`: check first, then open assistant when ready
 - `waba start`: full guided setup + launch flow
+- `waba panic`: safe reset for local config issues (keeps client credentials)
 
 Friendly recovery is enabled for typos and natural verbs:
 - `waba chek` -> `waba check`

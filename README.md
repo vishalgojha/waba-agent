@@ -27,6 +27,7 @@ Use these first (no flags needed):
 - `waba panic`: safe reset for local config issues (keeps client credentials)
 - `waba help-me`: beginner command guide
 - `waba whoami`: show current setup state + one next command
+- `waba tour`: 30-second walkthrough (`whoami -> check -> next`)
 
 Friendly recovery is enabled for typos and natural verbs:
 - `waba chek` -> `waba check`

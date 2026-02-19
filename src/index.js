@@ -35,7 +35,7 @@ const { registerStartCommands } = require("./commands/start");
 const { registerConfigCommands } = require("./commands/config");
 const { registerSetupCommands } = require("./commands/setup");
 const { registerStatusCommands } = require("./commands/status");
-const { registerDemoCommands } = require("./commands/demo");
+const { registerDemoCommands, runGuidedDemo } = require("./commands/demo");
 const { registerCheckCommands } = require("./commands/check");
 const { registerFixCommands } = require("./commands/fix");
 const { registerPanicCommands } = require("./commands/panic");
@@ -146,7 +146,19 @@ async function main() {
     .option("--scope-check-mode <mode>", "strict|best-effort", "best-effort")
     .option("--fail-on-warn", "exit non-zero when report overall is WARN", false)
     .action(async (opts) => {
-      logger.info("Beginner tip: use `waba check` for simple setup guidance.");
+      logger.info("Use `waba check` (simple) or `waba tour` (guided).");
+      const isJson = !!program.opts().json;
+      if (!isJson) {
+        const out = await runGuidedDemo({
+          autoFix: false,
+          scopeCheckMode: String(opts.scopeCheckMode || "best-effort")
+        });
+        logger.info(`Doctor summary: ${out.ok ? "OK" : "NEEDS ATTENTION"}`);
+        logger.info(`Next: ${out.ok ? "waba go" : "waba fix"}`);
+        if (!out.ok) process.exitCode = 1;
+        return;
+      }
+
       logger.warn("Deprecated path: `waba doctor` now routes to `waba ts doctor`. Use `waba ts doctor` directly.");
       try {
         await runTsDoctor({
@@ -155,6 +167,11 @@ async function main() {
           failOnWarn: !!opts.failOnWarn
         });
       } catch (err) {
+        const msg = String(err?.message || err);
+        if (isJson && msg.includes("Doctor gate failed")) {
+          process.exitCode = 1;
+          return;
+        }
         logger.warn(`TS doctor route unavailable, falling back to legacy doctor: ${err?.message || err}`);
         const { doctor } = require("./lib/doctor");
         await doctor({

@@ -39,6 +39,7 @@ const { registerDemoCommands } = require("./commands/demo");
 const { registerCheckCommands } = require("./commands/check");
 const { registerFixCommands } = require("./commands/fix");
 const { registerPanicCommands } = require("./commands/panic");
+const { registerHelpMeCommands } = require("./commands/help-me");
 const {
   registerTsCommands,
   runTsDoctor,
@@ -132,6 +133,7 @@ async function main() {
   registerCheckCommands(program);
   registerFixCommands(program);
   registerPanicCommands(program);
+  registerHelpMeCommands(program);
   registerTsCommands(program);
 
   program
@@ -221,11 +223,18 @@ async function main() {
     });
 
   const rawArgs = process.argv.slice(2);
+  const loweredArgs = rawArgs.map((x) => String(x || "").trim().toLowerCase());
   let argv = shouldAutoStart(rawArgs) ? [...process.argv, "start"] : process.argv;
+
+  // Friendly phrase support: allow "waba help me" for non-technical users.
+  if (loweredArgs[0] === "help" && loweredArgs[1] === "me") {
+    argv = [...process.argv.slice(0, 2), "help-me", ...rawArgs.slice(2)];
+  }
 
   if (!shouldAutoStart(rawArgs)) {
     const known = collectKnownCommandNames(program);
-    const resolved = resolveFriendlyCommand(rawArgs, known);
+    const currentArgs = argv.slice(2);
+    const resolved = resolveFriendlyCommand(currentArgs, known);
     if (resolved) {
       logger.warn(`Interpreted '${resolved.original}' as '${resolved.target}'.`);
       argv = [...process.argv.slice(0, 2), ...resolved.rewritten];

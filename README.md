@@ -25,10 +25,12 @@ Use these first (no flags needed):
 - `waba start`: full guided setup + launch flow
 - `waba hi`: same as `waba start`
 - `waba panic`: safe reset for local config issues (keeps client credentials)
+- `waba help-me`: beginner command guide
 
 Friendly recovery is enabled for typos and natural verbs:
 - `waba chek` -> `waba check`
 - `waba launch assistant` -> `waba go`
+- `waba help me` -> `waba help-me`
 
 First-time order:
 1. `waba check`

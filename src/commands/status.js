@@ -1,7 +1,19 @@
+const fs = require("fs-extra");
+const path = require("path");
+const { pathToFileURL } = require("url");
 const { getConfig } = require("../lib/config");
 const { redactToken } = require("../lib/redact");
 const { logger } = require("../lib/logger");
 const { buildReadiness } = require("../lib/readiness");
+
+async function loadTsConfigBridge() {
+  const root = path.resolve(__dirname, "..", "..");
+  const configJs = path.join(root, ".tmp-ts", "src-ts", "config.js");
+  if (!(await fs.pathExists(configJs))) return null;
+  const mod = await import(pathToFileURL(configJs).href);
+  if (!mod?.readConfig) return null;
+  return { readConfig: mod.readConfig };
+}
 
 function registerStatusCommands(program) {
   program
@@ -11,14 +23,36 @@ function registerStatusCommands(program) {
     .action(async (opts, cmd) => {
       const root = cmd.parent || program;
       const { json } = root.opts();
-      const cfg = await getConfig();
+      let cfg = await getConfig();
+      if (!opts.client) {
+        // Prefer TS config resolution during migration.
+        try {
+          const ts = await loadTsConfigBridge();
+          if (ts) {
+            const tsCfg = await ts.readConfig();
+            cfg = {
+              ...cfg,
+              token: tsCfg.token || cfg.token,
+              phoneNumberId: tsCfg.phoneNumberId || cfg.phoneNumberId,
+              wabaId: tsCfg.businessId || cfg.wabaId,
+              graphVersion: tsCfg.graphVersion || cfg.graphVersion,
+              baseUrl: tsCfg.baseUrl || cfg.baseUrl,
+              webhookUrl: tsCfg.webhookUrl || cfg.webhookUrl,
+              webhookVerifyToken: tsCfg.webhookVerifyToken || cfg.webhookVerifyToken
+            };
+          }
+        } catch (err) {
+          logger.warn(`TS status bridge unavailable, falling back to legacy config: ${err?.message || err}`);
+        }
+      }
       const out = buildReadiness(cfg, { client: opts.client });
       const payload = {
         ...out,
         creds: {
           token: out.creds.token ? redactToken(out.creds.token) : null,
           phoneNumberId: out.creds.phoneNumberId,
-          wabaId: out.creds.wabaId
+          wabaId: out.creds.wabaId,
+          businessId: out.creds.wabaId
         },
         webhookVerifyToken: cfg.webhookVerifyToken ? "***set***" : null
       };

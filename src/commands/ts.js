@@ -9,6 +9,7 @@ const {
   loadTsTuiBridge,
   loadTsClientsBridge,
   loadTsConfigEditBridge,
+  loadTsJaspersBridge,
   buildTsAgentConfigFromCreds
 } = require("../lib/ts-bridge");
 
@@ -242,6 +243,59 @@ async function runTsConfigUnset({ key, client } = {}) {
   logger.ok(`Removed ${out.scopedKey} from ${out.path}`);
 }
 
+async function runTsJaspersCatalog({ json = false } = {}) {
+  const bridge = await loadTsJaspersBridge();
+  if (!bridge) throw new Error("TypeScript jaspers runtime is unavailable. Run: npm.cmd run build:ts:tmp");
+  if (json) {
+    console.log(JSON.stringify({ ok: true, catalog: bridge.catalog }, null, 2));
+    return;
+  }
+  for (const item of bridge.catalog) {
+    logger.info(`${item.code} ${item.name} INR ${item.priceInr} [${item.category}]`);
+  }
+}
+
+async function runTsJaspersHandle({ phone, text, json = false, dryRun = false } = {}) {
+  const bridge = await loadTsJaspersBridge();
+  if (!bridge) throw new Error("TypeScript jaspers runtime is unavailable. Run: npm.cmd run build:ts:tmp");
+  const prev = await bridge.getMarketSession(String(phone || ""));
+  const plan = bridge.planMarketReply(String(text || ""), String(phone || ""), prev);
+  await bridge.saveMarketSession(plan.nextSession);
+  if (dryRun) {
+    const payload = { ok: true, dryRun: true, stage: plan.stage, recommendations: plan.recommendations, replyText: plan.replyText };
+    if (json) {
+      console.log(JSON.stringify(payload, null, 2));
+      return;
+    }
+    logger.info(`stage=${plan.stage}`);
+    logger.info(plan.replyText);
+    return;
+  }
+  const cfg = await requireTsConfig();
+  const ops = await loadTsOpsBridge();
+  if (!ops) throw new Error("TypeScript jaspers runtime is unavailable. Run: npm.cmd run build:ts:tmp");
+  const intent = ops.validateIntent({
+    action: "send_text",
+    business_id: cfg.businessId || "",
+    phone_number_id: cfg.phoneNumberId || "",
+    payload: { to: String(phone || ""), body: plan.replyText },
+    risk: "HIGH"
+  });
+  const out = await ops.executeIntent(intent, {
+    token: cfg.token || "",
+    businessId: cfg.businessId || "",
+    phoneNumberId: cfg.phoneNumberId || "",
+    graphVersion: cfg.graphVersion || "v20.0",
+    baseUrl: cfg.baseUrl || "https://graph.facebook.com"
+  });
+  if (json) {
+    console.log(JSON.stringify({ ok: true, stage: plan.stage, recommendations: plan.recommendations, sent: out }, null, 2));
+    return;
+  }
+  logger.info(`stage=${plan.stage}`);
+  logger.info(plan.replyText);
+}
+
 function registerTsCommands(program) {
   const t = program.command("ts").description("TypeScript control-plane runtime (migration path)");
 
@@ -372,6 +426,46 @@ function registerTsCommands(program) {
     .action(async (key, opts) => {
       await runTsConfigUnset({ key, client: opts.client });
     });
+
+  const j = t.command("jaspers").description("run TS jaspers-market playbook");
+  j.command("catalog")
+    .description("show built-in catalog")
+    .action(async (_opts, cmd) => {
+      const root = cmd.parent?.parent?.parent || program;
+      const { json } = root.opts();
+      await runTsJaspersCatalog({ json });
+    });
+  j.command("menu")
+    .description("send playbook starter menu")
+    .requiredOption("--to <phone>", "recipient phone")
+    .option("--dry-run", "plan only, do not send to Meta", false)
+    .action(async (opts, cmd) => {
+      const root = cmd.parent?.parent?.parent || program;
+      const { json } = root.opts();
+      await runTsJaspersHandle({ phone: opts.to, text: "menu", json, dryRun: !!opts.dryRun });
+    });
+  j.command("recommend")
+    .description("send recommendations by occasion/budget")
+    .requiredOption("--to <phone>", "recipient phone")
+    .requiredOption("--occasion <name>", "occasion")
+    .option("--budget <inr>", "budget cap", "1500")
+    .option("--dry-run", "plan only, do not send to Meta", false)
+    .action(async (opts, cmd) => {
+      const root = cmd.parent?.parent?.parent || program;
+      const { json } = root.opts();
+      const text = `${String(opts.occasion || "")} under ${String(opts.budget || "1500")}`;
+      await runTsJaspersHandle({ phone: opts.to, text, json, dryRun: !!opts.dryRun });
+    });
+  j.command("handle")
+    .description("simulate inbound text and send playbook response")
+    .requiredOption("--from <phone>", "sender phone")
+    .requiredOption("--text <text>", "incoming text")
+    .option("--dry-run", "plan only, do not send to Meta", false)
+    .action(async (opts, cmd) => {
+      const root = cmd.parent?.parent?.parent || program;
+      const { json } = root.opts();
+      await runTsJaspersHandle({ phone: opts.from, text: opts.text, json, dryRun: !!opts.dryRun });
+    });
 }
 
 module.exports = {
@@ -390,5 +484,7 @@ module.exports = {
   runTsClientsRemove,
   runTsConfigShow,
   runTsConfigSet,
-  runTsConfigUnset
+  runTsConfigUnset,
+  runTsJaspersCatalog,
+  runTsJaspersHandle
 };

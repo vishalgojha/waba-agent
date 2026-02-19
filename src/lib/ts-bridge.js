@@ -94,6 +94,21 @@ async function loadTsConfigEditBridge() {
   };
 }
 
+async function loadTsJaspersBridge() {
+  const catalogMod = await loadTsModule("domain", "jaspers-market", "catalog.js");
+  const playbookMod = await loadTsModule("domain", "jaspers-market", "playbook.js");
+  const storeMod = await loadTsModule("domain", "jaspers-market", "state-store.js");
+  if (!catalogMod?.JASPERS_CATALOG || !playbookMod?.planMarketReply || !storeMod?.getMarketSession || !storeMod?.saveMarketSession) {
+    return null;
+  }
+  return {
+    catalog: catalogMod.JASPERS_CATALOG,
+    planMarketReply: playbookMod.planMarketReply,
+    getMarketSession: storeMod.getMarketSession,
+    saveMarketSession: storeMod.saveMarketSession
+  };
+}
+
 function buildTsAgentConfigFromCreds(cfg, creds) {
   return {
     token: String(creds?.token || ""),
@@ -114,5 +129,6 @@ module.exports = {
   loadTsTuiBridge,
   loadTsClientsBridge,
   loadTsConfigEditBridge,
+  loadTsJaspersBridge,
   buildTsAgentConfigFromCreds
 };

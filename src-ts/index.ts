@@ -13,6 +13,9 @@ import { assertReplayIntentHasRequiredPayload } from "./replay-guard.js";
 import { shouldFailDoctorGate } from "./doctor-policy.js";
 import { addOrUpdateClient, listClients, removeClient, switchClient } from "./clients.js";
 import { setConfigValue, showConfig, unsetConfigValue } from "./config-edit.js";
+import { JASPERS_CATALOG } from "./domain/jaspers-market/catalog.js";
+import { getMarketSession, saveMarketSession } from "./domain/jaspers-market/state-store.js";
+import { planMarketReply } from "./domain/jaspers-market/playbook.js";
 
 async function requireConfigured() {
   const cfg = await readConfig();
@@ -33,6 +36,20 @@ async function ensureOnboardedForHatch(): Promise<boolean> {
   const ok = !!(cfg.token && cfg.businessId && cfg.phoneNumberId);
   if (!ok) onboardingHints();
   return ok;
+}
+
+async function sendTextThroughExecutor(cfg: Awaited<ReturnType<typeof requireConfigured>>, to: string, body: string) {
+  const intent = validateIntent({
+    action: "send_text",
+    business_id: cfg.businessId,
+    phone_number_id: cfg.phoneNumberId,
+    payload: {
+      to,
+      body
+    },
+    risk: "HIGH"
+  });
+  return executeIntent(intent, cfg);
 }
 
 async function run() {
@@ -302,6 +319,94 @@ async function run() {
       const res = await switchClient(String(name));
       logConsole("INFO", `Active client: ${res.activeClient}`);
       logConsole("INFO", `Config: ${res.path}`);
+    });
+
+  const jaspers = p.command("jaspers").description("Jaspers Market playbook (inspired domain flow)");
+
+  jaspers
+    .command("catalog")
+    .description("show built-in commerce catalog used by playbook")
+    .action(async () => {
+      if (p.opts().json) {
+        console.log(JSON.stringify({ ok: true, catalog: JASPERS_CATALOG }, null, 2));
+        return;
+      }
+      for (const item of JASPERS_CATALOG) {
+        logConsole("INFO", `${item.code} ${item.name} INR ${item.priceInr} [${item.category}]`);
+      }
+    });
+
+  jaspers
+    .command("menu")
+    .description("send starter menu to a phone")
+    .requiredOption("--to <phone>", "recipient phone in international format")
+    .option("--dry-run", "plan only, do not send to Meta", false)
+    .action(async (opts) => {
+      const cfg = await requireConfigured();
+      const plan = planMarketReply("menu", String(opts.to), await getMarketSession(String(opts.to)));
+      await saveMarketSession(plan.nextSession);
+      if (opts.dryRun) {
+        console.log(JSON.stringify({ ok: true, dryRun: true, stage: plan.stage, replyText: plan.replyText }, null, 2));
+        return;
+      }
+      const out = await sendTextThroughExecutor(cfg, String(opts.to), plan.replyText);
+      console.log(JSON.stringify(out, null, 2));
+    });
+
+  jaspers
+    .command("recommend")
+    .description("send recommendations by occasion/budget")
+    .requiredOption("--to <phone>", "recipient phone")
+    .requiredOption("--occasion <name>", "birthday|anniversary|wedding|congrats|thank-you")
+    .option("--budget <inr>", "budget cap", "1500")
+    .option("--dry-run", "plan only, do not send to Meta", false)
+    .action(async (opts) => {
+      const cfg = await requireConfigured();
+      const syntheticInbound = `${String(opts.occasion)} under ${String(opts.budget)}`;
+      const plan = planMarketReply(syntheticInbound, String(opts.to), await getMarketSession(String(opts.to)));
+      await saveMarketSession(plan.nextSession);
+      if (opts.dryRun) {
+        console.log(
+          JSON.stringify({ ok: true, dryRun: true, stage: plan.stage, recommendations: plan.recommendations, replyText: plan.replyText }, null, 2)
+        );
+        return;
+      }
+      const out = await sendTextThroughExecutor(cfg, String(opts.to), plan.replyText);
+      console.log(JSON.stringify(out, null, 2));
+    });
+
+  jaspers
+    .command("handle")
+    .description("simulate inbound text and send next playbook response")
+    .requiredOption("--from <phone>", "inbound sender phone")
+    .requiredOption("--text <text>", "inbound message text")
+    .option("--dry-run", "plan only, do not send to Meta", false)
+    .action(async (opts) => {
+      const cfg = await requireConfigured();
+      const plan = planMarketReply(String(opts.text), String(opts.from), await getMarketSession(String(opts.from)));
+      await saveMarketSession(plan.nextSession);
+      if (opts.dryRun) {
+        console.log(JSON.stringify({ ok: true, dryRun: true, stage: plan.stage, recommendations: plan.recommendations, replyText: plan.replyText }, null, 2));
+        return;
+      }
+      const out = await sendTextThroughExecutor(cfg, String(opts.from), plan.replyText);
+      if (p.opts().json) {
+        console.log(
+          JSON.stringify(
+            {
+              ok: true,
+              stage: plan.stage,
+              recommendations: plan.recommendations,
+              sent: out
+            },
+            null,
+            2
+          )
+        );
+        return;
+      }
+      logConsole("INFO", `stage=${plan.stage}`);
+      logConsole("INFO", plan.replyText);
     });
 
   clients

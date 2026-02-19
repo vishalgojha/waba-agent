@@ -143,6 +143,21 @@ Replay:
 npm run start:ts -- replay-list --limit 20
 npm run start:ts -- replay <id> --dry-run
 npm run start:ts -- replay <id>
+
+### Jaspers Market Playbook (Domain Integration)
+
+Smart integration inspired by Meta's `whatsapp-business-jaspers-market` sample, adapted to this control-plane architecture:
+- no direct app copy
+- uses existing intent/executor/replay/logging safety spine
+- keeps domain logic modular under `src-ts/domain/jaspers-market`
+
+Commands:
+```bash
+waba ts jaspers catalog
+waba ts jaspers menu --to 9198XXXXXXX --dry-run
+waba ts jaspers recommend --to 9198XXXXXXX --occasion birthday --budget 1200 --dry-run
+waba ts jaspers handle --from 9198XXXXXXX --text "birthday under 1000" --dry-run
+```
 ```
 
 TS TUI shortcuts:

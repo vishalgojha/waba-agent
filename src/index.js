@@ -40,6 +40,7 @@ const { registerCheckCommands } = require("./commands/check");
 const { registerFixCommands } = require("./commands/fix");
 const { registerPanicCommands } = require("./commands/panic");
 const { registerHelpMeCommands } = require("./commands/help-me");
+const { registerWhoamiCommands } = require("./commands/whoami");
 const {
   registerTsCommands,
   runTsDoctor,
@@ -134,6 +135,7 @@ async function main() {
   registerFixCommands(program);
   registerPanicCommands(program);
   registerHelpMeCommands(program);
+  registerWhoamiCommands(program);
   registerTsCommands(program);
 
   program

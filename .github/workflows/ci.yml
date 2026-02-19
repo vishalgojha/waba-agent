@@ -12,6 +12,13 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      WABA_CI_TOKEN: ${{ secrets.WABA_CI_TOKEN }}
+      WABA_CI_BUSINESS_ID: ${{ secrets.WABA_CI_BUSINESS_ID }}
+      WABA_CI_PHONE_NUMBER_ID: ${{ secrets.WABA_CI_PHONE_NUMBER_ID }}
+      WABA_CI_WEBHOOK_URL: ${{ secrets.WABA_CI_WEBHOOK_URL }}
+      WABA_CI_TEST_RECIPIENT: ${{ secrets.WABA_CI_TEST_RECIPIENT }}
+      WABA_CI_TEST_TEMPLATE: ${{ secrets.WABA_CI_TEST_TEMPLATE }}
     strategy:
       fail-fast: false
       matrix:
@@ -58,20 +65,20 @@ jobs:
           npm run test:ts:spec
 
       - name: Prepare TS doctor strict config
-        if: ${{ secrets.WABA_CI_TOKEN != '' && secrets.WABA_CI_BUSINESS_ID != '' && secrets.WABA_CI_PHONE_NUMBER_ID != '' }}
+        if: ${{ env.WABA_CI_TOKEN != '' && env.WABA_CI_BUSINESS_ID != '' && env.WABA_CI_PHONE_NUMBER_ID != '' }}
         run: |
           mkdir -p "$HOME/.waba-agent"
-          cat > "$HOME/.waba-agent/config.json" << 'JSON'
+          cat > "$HOME/.waba-agent/config.json" << JSON
           {
-            "token": "${{ secrets.WABA_CI_TOKEN }}",
-            "businessId": "${{ secrets.WABA_CI_BUSINESS_ID }}",
-            "phoneNumberId": "${{ secrets.WABA_CI_PHONE_NUMBER_ID }}",
-            "webhookUrl": "${{ secrets.WABA_CI_WEBHOOK_URL }}",
-            "testRecipient": "${{ secrets.WABA_CI_TEST_RECIPIENT }}",
-            "testTemplate": "${{ secrets.WABA_CI_TEST_TEMPLATE }}"
+            "token": "${WABA_CI_TOKEN}",
+            "businessId": "${WABA_CI_BUSINESS_ID}",
+            "phoneNumberId": "${WABA_CI_PHONE_NUMBER_ID}",
+            "webhookUrl": "${WABA_CI_WEBHOOK_URL}",
+            "testRecipient": "${WABA_CI_TEST_RECIPIENT}",
+            "testTemplate": "${WABA_CI_TEST_TEMPLATE}"
           }
           JSON
 
       - name: TS doctor strict
-        if: ${{ secrets.WABA_CI_TOKEN != '' && secrets.WABA_CI_BUSINESS_ID != '' && secrets.WABA_CI_PHONE_NUMBER_ID != '' }}
+        if: ${{ env.WABA_CI_TOKEN != '' && env.WABA_CI_BUSINESS_ID != '' && env.WABA_CI_PHONE_NUMBER_ID != '' }}
         run: npm run doctor:ts:strict

@@ -17,6 +17,53 @@ export interface HandlerContext {
   streamAssistant: (text: string) => Promise<void>;
 }
 
+type JaspersBridge = {
+  planMarketReply: (text: string, from: string, prev: unknown) => {
+    stage: string;
+    risk: "LOW" | "MEDIUM" | "HIGH";
+    replyText: string;
+    recommendations: Array<{ code: string }>;
+    nextSession: unknown;
+  };
+  getMarketSession: (from: string) => Promise<unknown>;
+  saveMarketSession: (session: unknown) => Promise<void>;
+};
+
+export function parseJaspersSlashArgs(arg: string): { from: string; text: string } | null {
+  const trimmed = String(arg || "").trim();
+  if (!trimmed) return null;
+  const [fromRaw, ...rest] = trimmed.split(/\s+/);
+  const text = rest.join(" ").trim();
+  const from = String(fromRaw || "").replace(/[^\d]/g, "");
+  if (!from || !text) return null;
+  return { from, text };
+}
+
+function mapPlanRiskToIntentRisk(risk: string): Intent["risk"] {
+  const r = String(risk || "").toUpperCase();
+  if (r === "HIGH") return "HIGH";
+  if (r === "LOW") return "LOW";
+  return "MEDIUM";
+}
+
+export function buildJaspersDraftIntent(
+  cfg: { businessId?: string; phoneNumberId?: string },
+  from: string,
+  replyText: string,
+  risk: string
+): Intent {
+  return validateIntent({
+    action: "send_text",
+    business_id: String(cfg.businessId || ""),
+    phone_number_id: String(cfg.phoneNumberId || ""),
+    payload: {
+      to: String(from || ""),
+      body: String(replyText || "")
+    },
+    risk: mapPlanRiskToIntentRisk(risk)
+  });
+}
+
 function missingSlots(intent: Intent): string[] {
   if (intent.action === "send_template") {
     const miss = [];
@@ -43,7 +90,7 @@ export async function handleSlash(raw: string, ctx: HandlerContext): Promise<Sla
   const cfg = await readConfig();
 
   if (cmd === "help") {
-    await ctx.streamAssistant("Commands: /help /doctor /status /config /logs /replay <id|latest> [/dry-run] /ai <intent>");
+    await ctx.streamAssistant("Commands: /help /doctor /status /config /logs /replay <id|latest> [/dry-run] /ai <intent> /jaspers <phone> <text>");
     return { handled: true };
   }
   if (cmd === "status") {
@@ -132,6 +179,62 @@ export async function handleSlash(raw: string, ctx: HandlerContext): Promise<Sla
     }
     ctx.dispatch({ type: "push-turn", value: makeTurn("system", `ai parse: ${arg}`) });
     return { handled: false, message: arg };
+  }
+  if (cmd === "jaspers") {
+    const parsed = parseJaspersSlashArgs(arg);
+    if (!parsed) {
+      await ctx.streamAssistant("Usage: /jaspers <phone> <text>");
+      return { handled: true };
+    }
+    const tsBridge = require("../lib/ts-bridge.js") as { loadTsJaspersBridge?: () => Promise<JaspersBridge | null> };
+    const loadFn = tsBridge.loadTsJaspersBridge;
+    if (!loadFn) {
+      await ctx.streamAssistant("Jaspers runtime unavailable.");
+      return { handled: true };
+    }
+    const bridge = await loadFn();
+    if (!bridge?.planMarketReply || !bridge?.getMarketSession || !bridge?.saveMarketSession) {
+      await ctx.streamAssistant("Jaspers runtime unavailable. Run: npm run build:ts:tmp");
+      return { handled: true };
+    }
+
+    const prev = await bridge.getMarketSession(parsed.from);
+    const plan = bridge.planMarketReply(parsed.text, parsed.from, prev || null);
+    await bridge.saveMarketSession(plan.nextSession);
+
+    const draftIntent = buildJaspersDraftIntent(cfg, parsed.from, plan.replyText, plan.risk);
+    const reasonRequired = draftIntent.risk === "HIGH";
+    const approvalId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+
+    ctx.dispatch({
+      type: "set-plan",
+      value: {
+        action: "jaspers.plan_reply",
+        risk: draftIntent.risk,
+        client: cfg.businessId || "default",
+        missingSlots: [],
+        intent: draftIntent
+      }
+    });
+    ctx.dispatch({ type: "set-queue", value: [draftIntent] });
+    ctx.dispatch({
+      type: "enqueue-approval",
+      value: {
+        id: approvalId,
+        intent: draftIntent,
+        reasonRequired
+      }
+    });
+    ctx.dispatch({ type: "push-log", value: `jaspers_plan_created stage=${plan.stage} risk=${plan.risk} to=${parsed.from}` });
+    ctx.dispatch({ type: "push-log", value: `jaspers_plan_promoted_to_send action=send_text risk=${draftIntent.risk}` });
+
+    await ctx.streamAssistant(
+      `Jaspers stage=${plan.stage} risk=${plan.risk}\nDraft reply:\n${plan.replyText}\n` +
+      (reasonRequired
+        ? "HIGH risk draft queued. Press e to add approval reason, then a/Enter to approve."
+        : "Draft queued. Press a/Enter to approve send or r to reject.")
+    );
+    return { handled: true };
   }
 
   await ctx.streamAssistant(`Unknown command: /${cmd}`);

@@ -19,7 +19,7 @@ const theme = {
   critical: "#B48EAD"
 };
 
-const palette = ["/help", "/doctor", "/status", "/config", "/logs", "/replay latest", "/ai "];
+const palette = ["/help", "/doctor", "/status", "/config", "/logs", "/replay latest", "/jaspers 9198 <text>", "/ai "];
 
 type EditMode =
   | { kind: "slot"; name: string }
@@ -340,7 +340,7 @@ export function RunTui(): React.JSX.Element {
       </Box>
 
       <Box borderStyle="single" borderColor={theme.muted} paddingX={1} justifyContent="space-between">
-        <Text color={theme.muted}>Enter send | a approve | r reject | e edit | / palette | x rail | q quit</Text>
+        <Text color={theme.muted}>Enter send | a approve | r reject | e edit | / palette | /jaspers | x rail | q quit</Text>
         <Text color={theme.muted}>logs={state.logs.length}</Text>
       </Box>
     </Box>

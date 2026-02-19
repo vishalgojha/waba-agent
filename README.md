@@ -151,6 +151,11 @@ Run one command before demos:
 waba demo smoke
 ```
 
+If you want exact next commands based on your current setup state:
+```bash
+waba demo next
+```
+
 This prints plain `PASS`/`FAIL` checks for:
 - Meta credentials readiness
 - webhook verify token presence

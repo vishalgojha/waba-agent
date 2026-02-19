@@ -99,6 +99,73 @@ async function runSmokeChecks() {
   };
 }
 
+async function generateDemoNextSteps() {
+  const cfg = await getConfig();
+  const readiness = buildReadiness(cfg, {});
+  const steps = [];
+  let index = 1;
+
+  const pushStep = (title, command, why) => {
+    steps.push({
+      id: index++,
+      title: String(title || ""),
+      command: String(command || ""),
+      why: String(why || "")
+    });
+  };
+
+  if (!readiness.metaReady) {
+    pushStep(
+      "Connect Meta credentials",
+      'waba auth login --token "<PERMANENT_TOKEN>" --phone-id "<PHONE_NUMBER_ID>" --business-id "<WABA_ID>"',
+      "required before any real WhatsApp API call"
+    );
+  }
+
+  if (!readiness.webhookReady) {
+    pushStep(
+      "Set webhook verify token",
+      "waba setup --generate-verify-token",
+      "required for webhook verification and inbound flow"
+    );
+  }
+
+  pushStep(
+    "Run health gate",
+    "waba doctor --scope-check-mode strict",
+    "verifies token, scopes, phone access, webhook reachability and test capability"
+  );
+
+  pushStep(
+    "Run quick demo smoke",
+    "waba demo smoke",
+    "confirms control-plane wiring in one command"
+  );
+
+  pushStep(
+    "Launch guided runtime",
+    "waba start",
+    "opens beginner assistant for safe next actions"
+  );
+
+  if (readiness.overallReady) {
+    pushStep(
+      "Open agentic Hatch UI",
+      "npm run hatch:ts",
+      "chat-first operator cockpit with approvals and replay"
+    );
+  }
+
+  return {
+    client: readiness.client,
+    activeClient: readiness.activeClient,
+    metaReady: readiness.metaReady,
+    webhookReady: readiness.webhookReady,
+    overallReady: readiness.overallReady,
+    steps
+  };
+}
+
 function registerDemoCommands(program) {
   const d = program.command("demo").description("non-technical demo/testing helpers");
 
@@ -126,9 +193,32 @@ function registerDemoCommands(program) {
         process.exitCode = 1;
       }
     });
+
+  d.command("next")
+    .description("show exact next commands for non-technical setup/testing")
+    .action(async (_opts, cmd) => {
+      const root = cmd.parent?.parent || program;
+      const { json } = root.opts();
+      const out = await generateDemoNextSteps();
+
+      if (json) {
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify(out, null, 2));
+        return;
+      }
+
+      logger.info(`Demo Next Steps (client=${out.client}, active=${out.activeClient})`);
+      logger.info(`Readiness: meta=${out.metaReady ? "ready" : "missing"}, webhook=${out.webhookReady ? "ready" : "missing"}`);
+      for (const step of out.steps) {
+        logger.info(`${step.id}. ${step.title}`);
+        logger.info(`   ${step.command}`);
+        logger.info(`   why: ${step.why}`);
+      }
+    });
 }
 
 module.exports = {
   registerDemoCommands,
-  runSmokeChecks
+  runSmokeChecks,
+  generateDemoNextSteps
 };

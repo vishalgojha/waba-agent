@@ -2,6 +2,9 @@ const { Command } = require("commander");
 const figlet = require("figlet");
 const chalkImport = require("chalk");
 const chalk = chalkImport.default || chalkImport;
+const fs = require("fs-extra");
+const path = require("path");
+const { pathToFileURL } = require("url");
 
 const { registerAuthCommands } = require("./commands/auth");
 const { registerWebhookCommands } = require("./commands/webhook");
@@ -40,12 +43,26 @@ const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
 const { initObservability } = require("./lib/observability");
 const { shouldAutoStart } = require("./lib/cli-autostart");
+const { getConfig } = require("./lib/config");
+const { requireClientCreds } = require("./lib/creds");
+const { createHttpClient } = require("./lib/http");
 
 function resolveServiceName(argv = process.argv.slice(2)) {
   const args = Array.isArray(argv) ? argv.map((x) => String(x || "").toLowerCase()) : [];
   if (args.includes("gateway") || args.includes("gw")) return "waba-gateway";
   if (args.includes("webhook")) return "waba-webhook";
   return "waba-cli";
+}
+
+async function loadTsOpsBridge() {
+  const root = path.resolve(__dirname, "..");
+  const execJs = path.join(root, ".tmp-ts", "src-ts", "engine", "executor.js");
+  const schemaJs = path.join(root, ".tmp-ts", "src-ts", "engine", "schema.js");
+  if (!(await fs.pathExists(execJs)) || !(await fs.pathExists(schemaJs))) return null;
+  const execMod = await import(pathToFileURL(execJs).href);
+  const schemaMod = await import(pathToFileURL(schemaJs).href);
+  if (!execMod?.executeIntent || !schemaMod?.validateIntent) return null;
+  return { executeIntent: execMod.executeIntent, validateIntent: schemaMod.validateIntent };
 }
 
 async function main() {
@@ -125,6 +142,78 @@ async function main() {
         scopeCheckMode: String(opts.scopeCheckMode || "best-effort"),
         failOnWarn: !!opts.failOnWarn
       });
+    });
+
+  program
+    .command("profile")
+    .description("show WhatsApp phone profile from Graph")
+    .option("--client <name>", "client name (default: active client)")
+    .action(async (opts) => {
+      const cfg = await getConfig();
+      const creds = requireClientCreds(cfg, opts.client);
+      const bridge = await loadTsOpsBridge();
+      if (bridge) {
+        const intent = bridge.validateIntent({
+          action: "get_profile",
+          business_id: String(creds.wabaId || ""),
+          phone_number_id: String(creds.phoneNumberId || ""),
+          payload: {},
+          risk: "LOW"
+        });
+        const out = await bridge.executeIntent(intent, {
+          token: String(creds.token || ""),
+          businessId: String(creds.wabaId || ""),
+          phoneNumberId: String(creds.phoneNumberId || ""),
+          graphVersion: String(cfg.graphVersion || "v20.0"),
+          baseUrl: String(cfg.baseUrl || "https://graph.facebook.com")
+        });
+        console.log(JSON.stringify(out.output, null, 2));
+        return;
+      }
+
+      logger.warn("TS bridge unavailable for profile; using legacy HTTP fallback.");
+      const http = createHttpClient({
+        baseURL: `${String(cfg.baseUrl || "https://graph.facebook.com").replace(/\/+$/, "")}/${String(cfg.graphVersion || "v20.0")}`,
+        token: creds.token
+      });
+      const res = await http.get(`/${creds.phoneNumberId}`);
+      console.log(JSON.stringify(res.data, null, 2));
+    });
+
+  program
+    .command("numbers")
+    .description("list phone numbers for current business")
+    .option("--client <name>", "client name (default: active client)")
+    .action(async (opts) => {
+      const cfg = await getConfig();
+      const creds = requireClientCreds(cfg, opts.client);
+      const bridge = await loadTsOpsBridge();
+      if (bridge) {
+        const intent = bridge.validateIntent({
+          action: "list_numbers",
+          business_id: String(creds.wabaId || ""),
+          phone_number_id: String(creds.phoneNumberId || ""),
+          payload: {},
+          risk: "LOW"
+        });
+        const out = await bridge.executeIntent(intent, {
+          token: String(creds.token || ""),
+          businessId: String(creds.wabaId || ""),
+          phoneNumberId: String(creds.phoneNumberId || ""),
+          graphVersion: String(cfg.graphVersion || "v20.0"),
+          baseUrl: String(cfg.baseUrl || "https://graph.facebook.com")
+        });
+        console.log(JSON.stringify(out.output, null, 2));
+        return;
+      }
+
+      logger.warn("TS bridge unavailable for numbers; using legacy HTTP fallback.");
+      const http = createHttpClient({
+        baseURL: `${String(cfg.baseUrl || "https://graph.facebook.com").replace(/\/+$/, "")}/${String(cfg.graphVersion || "v20.0")}`,
+        token: creds.token
+      });
+      const res = await http.get(`/${creds.wabaId}/phone_numbers`);
+      console.log(JSON.stringify(res.data, null, 2));
     });
 
   const rawArgs = process.argv.slice(2);

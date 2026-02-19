@@ -4,6 +4,18 @@ const { logger } = require("../lib/logger");
 const { saveDraft, loadDraft, listDrafts } = require("../lib/template-drafts");
 const { readMemory } = require("../lib/memory");
 const { requireClientCreds } = require("../lib/creds");
+const fs = require("fs-extra");
+const path = require("path");
+const { pathToFileURL } = require("url");
+
+async function loadTsTemplateBridge() {
+  const root = path.resolve(__dirname, "..", "..");
+  const metaJs = path.join(root, ".tmp-ts", "src-ts", "meta-client.js");
+  if (!(await fs.pathExists(metaJs))) return null;
+  const mod = await import(pathToFileURL(metaJs).href);
+  if (!mod?.MetaClient) return null;
+  return { MetaClient: mod.MetaClient };
+}
 
 function parseDurationMs(s) {
   const t = String(s || "").trim().toLowerCase();
@@ -111,14 +123,37 @@ function registerTemplateCommands(program) {
       const { json } = root.opts();
       const cfg = await getConfig();
       const creds = requireClientCreds(cfg, opts.client);
-      const api = new WhatsAppCloudApi({
-        token: creds.token,
-        phoneNumberId: creds.phoneNumberId,
-        wabaId: creds.wabaId,
-        graphVersion: cfg.graphVersion || "v20.0",
-        baseUrl: cfg.baseUrl
-      });
-      const data = await api.listTemplates({ limit: opts.limit });
+      let data;
+      try {
+        const ts = await loadTsTemplateBridge();
+        if (ts) {
+          const api = new ts.MetaClient({
+            token: String(creds.token || ""),
+            phoneNumberId: String(creds.phoneNumberId || ""),
+            businessId: String(creds.wabaId || ""),
+            graphVersion: String(cfg.graphVersion || "v20.0"),
+            baseUrl: String(cfg.baseUrl || "https://graph.facebook.com")
+          });
+          const out = await api.listTemplates();
+          if (out && typeof out === "object" && Array.isArray(out.data)) {
+            data = { ...out, data: out.data.slice(0, Number(opts.limit || 50)) };
+          } else {
+            data = out;
+          }
+        }
+      } catch (err) {
+        logger.warn(`TS template list bridge unavailable, falling back to JS path: ${err?.message || err}`);
+      }
+      if (data === undefined) {
+        const api = new WhatsAppCloudApi({
+          token: creds.token,
+          phoneNumberId: creds.phoneNumberId,
+          wabaId: creds.wabaId,
+          graphVersion: cfg.graphVersion || "v20.0",
+          baseUrl: cfg.baseUrl
+        });
+        data = await api.listTemplates({ limit: opts.limit });
+      }
       if (json) {
         // eslint-disable-next-line no-console
         console.log(JSON.stringify({ ok: true, data }, null, 2));

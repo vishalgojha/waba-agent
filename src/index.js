@@ -35,6 +35,7 @@ const { registerStartCommands } = require("./commands/start");
 const { registerConfigCommands } = require("./commands/config");
 const { registerSetupCommands } = require("./commands/setup");
 const { registerStatusCommands } = require("./commands/status");
+const { registerTsCommands } = require("./commands/ts");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -116,6 +117,7 @@ async function main() {
   registerConfigCommands(program);
   registerSetupCommands(program);
   registerStatusCommands(program);
+  registerTsCommands(program);
 
   program
     .command("doctor")

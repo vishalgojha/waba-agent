@@ -116,6 +116,9 @@ Run the TS control-plane CLI:
 npm run start:ts -- status
 npm run tui:ts
 npm run hatch:ts
+# JS CLI bridge to TS runtime:
+waba ts status
+waba ts doctor --scope-check-mode best-effort
 ```
 
 Note for Node 24 + Ink/yoga on some Windows setups:

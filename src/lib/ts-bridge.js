@@ -6,8 +6,12 @@ function repoRoot() {
   return path.resolve(__dirname, "..", "..");
 }
 
+function compiledPath(scope, ...segments) {
+  return path.join(repoRoot(), ".tmp-ts", scope, ...segments);
+}
+
 async function loadTsModule(...segments) {
-  const modPath = path.join(repoRoot(), ".tmp-ts", "src-ts", ...segments);
+  const modPath = compiledPath("src-ts", ...segments);
   if (!(await fs.pathExists(modPath))) return null;
   return import(pathToFileURL(modPath).href);
 }
@@ -46,6 +50,29 @@ async function loadTsMetaClientBridge() {
   return { MetaClient: mod.MetaClient };
 }
 
+async function loadTsReplayBridge() {
+  const replayMod = await loadTsModule("replay.js");
+  const guardMod = await loadTsModule("replay-guard.js");
+  const schemaMod = await loadTsModule("engine", "schema.js");
+  if (!replayMod?.listReplay || !replayMod?.getReplayById || !guardMod?.assertReplayIntentHasRequiredPayload || !schemaMod?.validateIntent) return null;
+  return {
+    listReplay: replayMod.listReplay,
+    getReplayById: replayMod.getReplayById,
+    assertReplayIntentHasRequiredPayload: guardMod.assertReplayIntentHasRequiredPayload,
+    validateIntent: schemaMod.validateIntent
+  };
+}
+
+async function loadTsTuiBridge() {
+  const modPath = compiledPath("src", "tui", "index.js");
+  if (!(await fs.pathExists(modPath))) return null;
+  const mod = await import(pathToFileURL(modPath).href);
+  if (!mod?.startHatchTui && !mod?.startTui) return null;
+  return {
+    startHatchTui: mod.startHatchTui || mod.startTui
+  };
+}
+
 function buildTsAgentConfigFromCreds(cfg, creds) {
   return {
     token: String(creds?.token || ""),
@@ -62,5 +89,7 @@ module.exports = {
   loadTsDoctorBridge,
   loadTsOpsBridge,
   loadTsMetaClientBridge,
+  loadTsReplayBridge,
+  loadTsTuiBridge,
   buildTsAgentConfigFromCreds
 };

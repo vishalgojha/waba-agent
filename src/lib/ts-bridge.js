@@ -73,6 +73,17 @@ async function loadTsTuiBridge() {
   };
 }
 
+async function loadTsClientsBridge() {
+  const mod = await loadTsModule("clients.js");
+  if (!mod?.listClients || !mod?.addOrUpdateClient || !mod?.switchClient || !mod?.removeClient) return null;
+  return {
+    listClients: mod.listClients,
+    addOrUpdateClient: mod.addOrUpdateClient,
+    switchClient: mod.switchClient,
+    removeClient: mod.removeClient
+  };
+}
+
 function buildTsAgentConfigFromCreds(cfg, creds) {
   return {
     token: String(creds?.token || ""),
@@ -91,5 +102,6 @@ module.exports = {
   loadTsMetaClientBridge,
   loadTsReplayBridge,
   loadTsTuiBridge,
+  loadTsClientsBridge,
   buildTsAgentConfigFromCreds
 };

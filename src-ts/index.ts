@@ -11,6 +11,7 @@ import { appendLog, logConsole } from "./logger.js";
 import { getReplayById, listReplay } from "./replay.js";
 import { assertReplayIntentHasRequiredPayload } from "./replay-guard.js";
 import { shouldFailDoctorGate } from "./doctor-policy.js";
+import { addOrUpdateClient, listClients, removeClient, switchClient } from "./clients.js";
 
 async function requireConfigured() {
   const cfg = await readConfig();
@@ -202,6 +203,70 @@ async function run() {
     .action(async (opts) => {
       const rows = await listReplay(Number(opts.limit || 20));
       console.log(JSON.stringify(rows, null, 2));
+    });
+
+  const clients = p.command("clients").description("multi-client management (agency mode)");
+
+  clients
+    .command("list")
+    .description("list configured clients")
+    .action(async () => {
+      const out = await listClients();
+      if (p.opts().json) {
+        console.log(JSON.stringify({ ok: true, ...out }, null, 2));
+        return;
+      }
+      logConsole("INFO", `Active: ${out.activeClient}`);
+      for (const x of out.clients) {
+        const mark = x.name === out.activeClient ? "*" : " ";
+        logConsole("INFO", `${mark} ${x.name} phoneId=${x.phoneNumberId || "-"} wabaId=${x.wabaId || "-"} token=${x.token || "-"}`);
+      }
+    });
+
+  clients
+    .command("add")
+    .description("add or update a client credentials set")
+    .argument("<name>", "client name (example: acme)")
+    .requiredOption("--token <token>", "permanent token")
+    .requiredOption("--phone-id <id>", "phone number id")
+    .requiredOption("--business-id <id>", "WABA id")
+    .option("--switch", "make this client active", false)
+    .action(async (name, opts) => {
+      const res = await addOrUpdateClient(
+        String(name),
+        {
+          token: String(opts.token),
+          phoneNumberId: String(opts.phoneId),
+          wabaId: String(opts.businessId)
+        },
+        { makeActive: !!opts.switch }
+      );
+      logConsole("INFO", `Saved client '${res.name}' (${res.path})`);
+      if (opts.switch) logConsole("INFO", `Active client: ${res.activeClient}`);
+    });
+
+  clients
+    .command("switch")
+    .description("switch active client")
+    .argument("<name>", "client name")
+    .action(async (name) => {
+      const res = await switchClient(String(name));
+      logConsole("INFO", `Active client: ${res.activeClient}`);
+      logConsole("INFO", `Config: ${res.path}`);
+    });
+
+  clients
+    .command("remove")
+    .description("remove a client from config (does not delete memory files)")
+    .argument("<name>", "client name")
+    .action(async (name) => {
+      const res = await removeClient(String(name));
+      if (!res.removed) {
+        logConsole("WARN", "Client not found.");
+        return;
+      }
+      logConsole("INFO", `Removed client. Active: ${res.activeClient}`);
+      logConsole("INFO", `Config: ${res.path}`);
     });
 
   p.command("tui").description("OpenClaw-style terminal control plane").action(async () => {

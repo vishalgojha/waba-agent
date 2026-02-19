@@ -7,6 +7,7 @@ const {
   loadTsMetaClientBridge,
   loadTsReplayBridge,
   loadTsTuiBridge,
+  loadTsClientsBridge,
   buildTsAgentConfigFromCreds
 } = require("../lib/ts-bridge");
 
@@ -154,6 +155,57 @@ async function runTsHatch() {
   tui.startHatchTui();
 }
 
+async function runTsClientsList({ json = false } = {}) {
+  const bridge = await loadTsClientsBridge();
+  if (!bridge) throw new Error("TypeScript clients runtime is unavailable. Run: npm.cmd run build:ts:tmp");
+  const out = await bridge.listClients();
+  if (json) {
+    console.log(JSON.stringify({ ok: true, ...out }, null, 2));
+    return;
+  }
+  logger.info(`Active: ${out.activeClient}`);
+  for (const x of out.clients || []) {
+    const mark = x.name === out.activeClient ? "*" : " ";
+    logger.info(`${mark} ${x.name} phoneId=${x.phoneNumberId || "-"} wabaId=${x.wabaId || "-"} token=${x.token || "-"}`);
+  }
+}
+
+async function runTsClientsAdd({ name, token, phoneId, businessId, makeActive = false } = {}) {
+  const bridge = await loadTsClientsBridge();
+  if (!bridge) throw new Error("TypeScript clients runtime is unavailable. Run: npm.cmd run build:ts:tmp");
+  const res = await bridge.addOrUpdateClient(
+    String(name || ""),
+    {
+      token: String(token || ""),
+      phoneNumberId: String(phoneId || ""),
+      wabaId: String(businessId || "")
+    },
+    { makeActive: !!makeActive }
+  );
+  logger.ok(`Saved client '${res.name}' (${res.path})`);
+  if (makeActive) logger.info(`Active client: ${res.activeClient}`);
+}
+
+async function runTsClientsSwitch({ name } = {}) {
+  const bridge = await loadTsClientsBridge();
+  if (!bridge) throw new Error("TypeScript clients runtime is unavailable. Run: npm.cmd run build:ts:tmp");
+  const res = await bridge.switchClient(String(name || ""));
+  logger.ok(`Active client: ${res.activeClient}`);
+  logger.info(`Config: ${res.path}`);
+}
+
+async function runTsClientsRemove({ name } = {}) {
+  const bridge = await loadTsClientsBridge();
+  if (!bridge) throw new Error("TypeScript clients runtime is unavailable. Run: npm.cmd run build:ts:tmp");
+  const res = await bridge.removeClient(String(name || ""));
+  if (!res.removed) {
+    logger.warn("Client not found.");
+    return;
+  }
+  logger.ok(`Removed client. Active: ${res.activeClient}`);
+  logger.info(`Config: ${res.path}`);
+}
+
 function registerTsCommands(program) {
   const t = program.command("ts").description("TypeScript control-plane runtime (migration path)");
 
@@ -219,6 +271,47 @@ function registerTsCommands(program) {
     .action(async () => {
       await runTsHatch();
     });
+
+  const clients = t.command("clients").description("run TS multi-client commands");
+  clients
+    .command("list")
+    .description("list configured clients")
+    .action(async (_opts, cmd) => {
+      const root = cmd.parent?.parent?.parent || program;
+      const { json } = root.opts();
+      await runTsClientsList({ json });
+    });
+  clients
+    .command("add")
+    .description("add or update a client credentials set")
+    .argument("<name>", "client name")
+    .requiredOption("--token <token>", "permanent token")
+    .requiredOption("--phone-id <id>", "phone number id")
+    .requiredOption("--business-id <id>", "WABA id")
+    .option("--switch", "make this client active", false)
+    .action(async (name, opts) => {
+      await runTsClientsAdd({
+        name,
+        token: opts.token,
+        phoneId: opts.phoneId,
+        businessId: opts.businessId,
+        makeActive: !!opts.switch
+      });
+    });
+  clients
+    .command("switch")
+    .description("switch active client")
+    .argument("<name>", "client name")
+    .action(async (name) => {
+      await runTsClientsSwitch({ name });
+    });
+  clients
+    .command("remove")
+    .description("remove client from config")
+    .argument("<name>", "client name")
+    .action(async (name) => {
+      await runTsClientsRemove({ name });
+    });
 }
 
 module.exports = {
@@ -230,5 +323,9 @@ module.exports = {
   runTsTemplates,
   runTsReplayList,
   runTsReplay,
-  runTsHatch
+  runTsHatch,
+  runTsClientsList,
+  runTsClientsAdd,
+  runTsClientsSwitch,
+  runTsClientsRemove
 };

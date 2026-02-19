@@ -294,6 +294,18 @@ export function RunTui(): React.JSX.Element {
                 </>
               ) : <Text color={theme.muted}>No active plan.</Text>}
             </Panel>
+            <Panel title="DOMAIN_FLOW">
+              {state.domainFlow ? (
+                <>
+                  <Text color={theme.text}>name={state.domainFlow.name}</Text>
+                  <Text color={riskColor(state.domainFlow.risk)}>stage={state.domainFlow.stage} risk={state.domainFlow.risk}</Text>
+                  <Text color={theme.text}>target={state.domainFlow.target}</Text>
+                  <Text color={theme.text}>recos={state.domainFlow.recommendationCodes.join(",") || "none"}</Text>
+                  <Text color={theme.muted}>preview={state.domainFlow.preview}</Text>
+                  <Text color={theme.muted}>at={state.domainFlow.updatedAt}</Text>
+                </>
+              ) : <Text color={theme.muted}>No domain flow active.</Text>}
+            </Panel>
             <Panel title="ACTIONS_QUEUE">
               {state.queue.length ? state.queue.map((item, i) => (
                 <Text key={`${item.action}-${i}`} color={theme.text}>{i + 1}. {item.action}</Text>

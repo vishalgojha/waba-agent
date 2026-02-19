@@ -35,6 +35,7 @@ export function createInitialState(): HatchState {
     results: [],
     rollback: [],
     logs: [],
+    domainFlow: null,
     selectedResult: 0,
     selectedApproval: 0,
     pendingConfirmReason: ""
@@ -74,6 +75,8 @@ export function hatchReducer(state: HatchState, action: HatchAction): HatchState
       return { ...state, showPalette: !state.showPalette };
     case "push-log":
       return { ...state, logs: [action.value, ...state.logs].slice(0, 80) };
+    case "set-domain-flow":
+      return { ...state, domainFlow: action.value };
     case "push-turn":
       return { ...state, transcript: [action.value, ...state.transcript].slice(0, 200) };
     case "patch-turn": {
@@ -130,4 +133,3 @@ export function hatchReducer(state: HatchState, action: HatchAction): HatchState
       return state;
   }
 }
-

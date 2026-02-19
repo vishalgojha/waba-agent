@@ -26,6 +26,16 @@ export interface ApprovalItem {
   reasonRequired: boolean;
 }
 
+export interface DomainFlowSummary {
+  name: string;
+  stage: string;
+  risk: Intent["risk"];
+  target: string;
+  recommendationCodes: string[];
+  preview: string;
+  updatedAt: string;
+}
+
 export interface RollbackNote {
   id: string;
   action: string;
@@ -51,6 +61,7 @@ export interface HatchState {
   results: ActionResult[];
   rollback: RollbackNote[];
   logs: string[];
+  domainFlow: DomainFlowSummary | null;
   selectedResult: number;
   selectedApproval: number;
   pendingConfirmReason: string;
@@ -66,6 +77,7 @@ export type HatchAction =
   | { type: "toggle-help" }
   | { type: "toggle-palette" }
   | { type: "push-log"; value: string }
+  | { type: "set-domain-flow"; value: DomainFlowSummary | null }
   | { type: "push-turn"; value: TranscriptTurn }
   | { type: "patch-turn"; id: string; text: string; streaming?: boolean }
   | { type: "set-plan"; value: PlanSummary | null }

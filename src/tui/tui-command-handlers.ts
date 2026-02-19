@@ -216,6 +216,18 @@ export async function handleSlash(raw: string, ctx: HandlerContext): Promise<Sla
         intent: draftIntent
       }
     });
+    ctx.dispatch({
+      type: "set-domain-flow",
+      value: {
+        name: "jaspers-market",
+        stage: String(plan.stage || "unknown"),
+        risk: draftIntent.risk,
+        target: parsed.from,
+        recommendationCodes: (plan.recommendations || []).map((x) => String(x.code)),
+        preview: String(plan.replyText || "").slice(0, 220),
+        updatedAt: new Date().toISOString().slice(11, 19)
+      }
+    });
     ctx.dispatch({ type: "set-queue", value: [draftIntent] });
     ctx.dispatch({
       type: "enqueue-approval",

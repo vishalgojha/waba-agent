@@ -350,6 +350,7 @@ async function startWebhookServer({
 
           let steps = null;
           let flowRes = null;
+          let domainOverallRisk = null;
           if (jaspersEnabled && textForIntent) {
             try {
               if (!tsJaspersBridge) tsJaspersBridge = await loadTsJaspersBridge();
@@ -359,6 +360,7 @@ async function startWebhookServer({
                 await tsJaspersBridge.saveMarketSession(plan.nextSession);
                 intent = "order_intent";
                 replyOverride = plan.replyText || replyOverride;
+                domainOverallRisk = String(plan.risk || "").toUpperCase() === "HIGH" ? "high" : "medium";
                 steps = [
                   {
                     tool: "memory.note",
@@ -530,7 +532,7 @@ async function startWebhookServer({
         }
 
         const hasOutbound = steps.some((s) => s.tool === "message.send_text" || s.tool === "template.send");
-        const overallRisk = hasOutbound ? "high" : "low";
+        const overallRisk = hasOutbound ? (domainOverallRisk || "high") : "low";
 
           // Execute with confirmations. Even with --yes, high-risk steps should prompt unless allowHighRisk is set.
           await executePlan(ctx, { steps, risk: overallRisk }, { yes: true, allowHighRisk: !!allowHighRisk, json: false });

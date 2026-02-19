@@ -14,10 +14,14 @@ export interface MarketSession {
   occasion?: string;
   budgetMaxInr?: number;
   selectedProductCode?: string;
+  recipientNote?: string;
+  quoteTotalInr?: number;
+  checkoutConfirmed?: boolean;
 }
 
 export interface MarketPlan {
   stage: MarketSession["stage"];
+  risk: "LOW" | "MEDIUM" | "HIGH";
   replyText: string;
   nextSession: MarketSession;
   recommendations: MarketProduct[];

@@ -264,7 +264,7 @@ async function runTsJaspersHandle({ phone, text, json = false, dryRun = false } 
   const plan = bridge.planMarketReply(String(text || ""), String(phone || ""), prev);
   await bridge.saveMarketSession(plan.nextSession);
   if (dryRun) {
-    const payload = { ok: true, dryRun: true, stage: plan.stage, recommendations: plan.recommendations, replyText: plan.replyText };
+    const payload = { ok: true, dryRun: true, stage: plan.stage, risk: plan.risk, recommendations: plan.recommendations, replyText: plan.replyText };
     if (json) {
       console.log(JSON.stringify(payload, null, 2));
       return;
@@ -291,7 +291,7 @@ async function runTsJaspersHandle({ phone, text, json = false, dryRun = false } 
     baseUrl: cfg.baseUrl || "https://graph.facebook.com"
   });
   if (json) {
-    console.log(JSON.stringify({ ok: true, stage: plan.stage, recommendations: plan.recommendations, sent: out }, null, 2));
+    console.log(JSON.stringify({ ok: true, stage: plan.stage, risk: plan.risk, recommendations: plan.recommendations, sent: out }, null, 2));
     return;
   }
   logger.info(`stage=${plan.stage}`);

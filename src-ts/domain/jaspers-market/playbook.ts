@@ -29,6 +29,22 @@ function parseProductCode(text: string): string | undefined {
   return m?.[0];
 }
 
+function hasCheckoutDetails(text: string): boolean {
+  const t = String(text || "").trim();
+  if (!t) return false;
+  const hasDateHint = /\b(today|tomorrow|am|pm|\d{1,2}[\/-]\d{1,2}([\/-]\d{2,4})?|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(t);
+  const hasRecipientHint = /\b(name|recipient|deliver|delivery|address|flat|house|society|lane|street|road|pincode|pin)\b/i.test(t);
+  return hasDateHint || hasRecipientHint || t.split(/\s+/).length >= 5;
+}
+
+function isConfirmOrder(text: string): boolean {
+  return /\bconfirm\s+order\b/i.test(String(text || ""));
+}
+
+function isEditOrder(text: string): boolean {
+  return /\b(edit|change|modify)\s+order\b/i.test(String(text || ""));
+}
+
 function topRecommendations(occasion?: string, budgetMaxInr?: number): MarketProduct[] {
   const scored = JASPERS_CATALOG.map((p) => {
     let score = 0;
@@ -60,6 +76,12 @@ function renderRecommendations(items: MarketProduct[]): string {
   return ["Recommended options:", ...lines, "Reply with product code (example: P2)."].join("\n");
 }
 
+function quoteFor(product: MarketProduct): { subtotalInr: number; deliveryInr: number; totalInr: number } {
+  const subtotalInr = product.priceInr;
+  const deliveryInr = subtotalInr >= 1500 ? 0 : 120;
+  return { subtotalInr, deliveryInr, totalInr: subtotalInr + deliveryInr };
+}
+
 export function planMarketReply(inputText: string, phone: string, prev: MarketSession | null): MarketPlan {
   const base: MarketSession = prev || {
     phone,
@@ -77,6 +99,7 @@ export function planMarketReply(inputText: string, phone: string, prev: MarketSe
     const nextSession: MarketSession = { ...base, updatedAt: nowIso(), stage: "menu" };
     return {
       stage: nextSession.stage,
+      risk: "MEDIUM",
       replyText: renderMenu(),
       nextSession,
       recommendations: []
@@ -96,11 +119,86 @@ export function planMarketReply(inputText: string, phone: string, prev: MarketSe
       };
       return {
         stage: nextSession.stage,
-        replyText: `Selected: ${chosen.name} (INR ${chosen.priceInr}).\nReply with recipient name + delivery date to continue checkout.`,
+        risk: "MEDIUM",
+        replyText: `Selected: ${chosen.name} (INR ${chosen.priceInr}).\nReply with recipient + delivery details to generate your quote.`,
         nextSession,
         recommendations: [chosen]
       };
     }
+  }
+
+  if (base.stage === "selected" && base.selectedProductCode && hasCheckoutDetails(text)) {
+    const chosen = JASPERS_CATALOG.find((x) => x.code === base.selectedProductCode);
+    if (chosen) {
+      const quote = quoteFor(chosen);
+      const nextSession: MarketSession = {
+        ...base,
+        updatedAt: nowIso(),
+        stage: "checkout",
+        recipientNote: text.slice(0, 240),
+        quoteTotalInr: quote.totalInr,
+        checkoutConfirmed: false
+      };
+      return {
+        stage: nextSession.stage,
+        risk: "MEDIUM",
+        replyText: [
+          `Quote for ${chosen.name}:`,
+          `Item: INR ${quote.subtotalInr}`,
+          `Delivery: INR ${quote.deliveryInr}`,
+          `Total: INR ${quote.totalInr}`,
+          "Reply exactly: CONFIRM ORDER",
+          "Or reply: EDIT ORDER"
+        ].join("\n"),
+        nextSession,
+        recommendations: [chosen]
+      };
+    }
+  }
+
+  if (base.stage === "checkout" && base.selectedProductCode) {
+    const chosen = JASPERS_CATALOG.find((x) => x.code === base.selectedProductCode);
+    if (isEditOrder(text)) {
+      const nextSession: MarketSession = {
+        ...base,
+        updatedAt: nowIso(),
+        stage: "selected",
+        checkoutConfirmed: false
+      };
+      return {
+        stage: nextSession.stage,
+        risk: "MEDIUM",
+        replyText: "Order moved back to edit mode. Share a new product code (example: P3).",
+        nextSession,
+        recommendations: chosen ? [chosen] : []
+      };
+    }
+    if (isConfirmOrder(text)) {
+      const nextSession: MarketSession = {
+        ...base,
+        updatedAt: nowIso(),
+        stage: "checkout",
+        checkoutConfirmed: true
+      };
+      const total = Number(base.quoteTotalInr || (chosen ? quoteFor(chosen).totalInr : 0));
+      return {
+        stage: nextSession.stage,
+        risk: "HIGH",
+        replyText: [
+          `Order confirmed for ${chosen?.name || "selected item"} (INR ${total}).`,
+          "A payment link and final delivery confirmation will be shared by our team shortly."
+        ].join("\n"),
+        nextSession,
+        recommendations: chosen ? [chosen] : []
+      };
+    }
+    return {
+      stage: base.stage,
+      risk: "MEDIUM",
+      replyText: "Please reply exactly: CONFIRM ORDER to proceed, or EDIT ORDER to change selection.",
+      nextSession: { ...base, updatedAt: nowIso() },
+      recommendations: chosen ? [chosen] : []
+    };
   }
 
   const recos = topRecommendations(occasion, budget);
@@ -113,6 +211,7 @@ export function planMarketReply(inputText: string, phone: string, prev: MarketSe
   };
   return {
     stage: nextSession.stage,
+    risk: "MEDIUM",
     replyText: renderRecommendations(recos),
     nextSession,
     recommendations: recos

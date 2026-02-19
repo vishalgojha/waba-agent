@@ -158,9 +158,17 @@ waba ts jaspers menu --to 9198XXXXXXX --dry-run
 waba ts jaspers recommend --to 9198XXXXXXX --occasion birthday --budget 1200 --dry-run
 waba ts jaspers handle --from 9198XXXXXXX --text "birthday under 1000" --dry-run
 waba ts jaspers webhook-handle --from 9198XXXXXXX --text "birthday under 1000" --dry-run
+waba ts jaspers webhook-handle --from 9198XXXXXXX --text "P2" --dry-run
+waba ts jaspers webhook-handle --from 9198XXXXXXX --text "Recipient Riya, tomorrow 6pm, Andheri" --dry-run
+waba ts jaspers webhook-handle --from 9198XXXXXXX --text "CONFIRM ORDER" --dry-run
 waba ts jaspers enable --client acme
 waba ts jaspers status --client acme
 ```
+
+Checkout safety:
+- quote is generated before final confirmation
+- user must reply exactly `CONFIRM ORDER` before checkout confirmation prompt
+- webhook risk policy: browsing/recommendation uses medium risk, checkout confirmation uses high risk
 ```
 
 TS TUI shortcuts:

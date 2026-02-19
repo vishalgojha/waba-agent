@@ -112,6 +112,7 @@ function registerTemplateCommands(program) {
       const { json } = root.opts();
       const cfg = await getConfig();
       const creds = requireClientCreds(cfg, opts.client);
+      logger.warn("Migration note: `waba template list` prefers TS runtime. Use `waba ts templates` for direct TS path.");
       let data;
       try {
         const ts = await loadTsMetaClientBridge();

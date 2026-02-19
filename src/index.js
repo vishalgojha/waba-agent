@@ -35,7 +35,7 @@ const { registerStartCommands } = require("./commands/start");
 const { registerConfigCommands } = require("./commands/config");
 const { registerSetupCommands } = require("./commands/setup");
 const { registerStatusCommands } = require("./commands/status");
-const { registerTsCommands } = require("./commands/ts");
+const { registerTsCommands, runTsDoctor, runTsProfile, runTsNumbers } = require("./commands/ts");
 
 const pkg = require("../package.json");
 const { logger } = require("./lib/logger");
@@ -125,12 +125,22 @@ async function main() {
     .option("--scope-check-mode <mode>", "strict|best-effort", "best-effort")
     .option("--fail-on-warn", "exit non-zero when report overall is WARN", false)
     .action(async (opts) => {
-      const { doctor } = require("./lib/doctor");
-      await doctor({
-        json: program.opts().json,
-        scopeCheckMode: String(opts.scopeCheckMode || "best-effort"),
-        failOnWarn: !!opts.failOnWarn
-      });
+      logger.warn("Deprecated path: `waba doctor` now routes to `waba ts doctor`. Use `waba ts doctor` directly.");
+      try {
+        await runTsDoctor({
+          json: program.opts().json,
+          scopeCheckMode: String(opts.scopeCheckMode || "best-effort"),
+          failOnWarn: !!opts.failOnWarn
+        });
+      } catch (err) {
+        logger.warn(`TS doctor route unavailable, falling back to legacy doctor: ${err?.message || err}`);
+        const { doctor } = require("./lib/doctor");
+        await doctor({
+          json: program.opts().json,
+          scopeCheckMode: String(opts.scopeCheckMode || "best-effort"),
+          failOnWarn: !!opts.failOnWarn
+        });
+      }
     });
 
   program
@@ -138,29 +148,20 @@ async function main() {
     .description("show WhatsApp phone profile from Graph")
     .option("--client <name>", "client name (default: active client)")
     .action(async (opts) => {
-      const cfg = await getConfig();
-      const creds = requireClientCreds(cfg, opts.client);
-      const bridge = await loadTsOpsBridge();
-      if (bridge) {
-        const intent = bridge.validateIntent({
-          action: "get_profile",
-          business_id: String(creds.wabaId || ""),
-          phone_number_id: String(creds.phoneNumberId || ""),
-          payload: {},
-          risk: "LOW"
+      logger.warn("Deprecated path: `waba profile` now routes to `waba ts profile`. Use `waba ts profile` directly.");
+      try {
+        await runTsProfile({ client: opts.client });
+      } catch (err) {
+        logger.warn(`TS profile route unavailable, falling back to legacy HTTP path: ${err?.message || err}`);
+        const cfg = await getConfig();
+        const creds = requireClientCreds(cfg, opts.client);
+        const http = createHttpClient({
+          baseURL: `${String(cfg.baseUrl || "https://graph.facebook.com").replace(/\/+$/, "")}/${String(cfg.graphVersion || "v20.0")}`,
+          token: creds.token
         });
-        const out = await bridge.executeIntent(intent, buildTsAgentConfigFromCreds(cfg, creds));
-        console.log(JSON.stringify(out.output, null, 2));
-        return;
+        const res = await http.get(`/${creds.phoneNumberId}`);
+        console.log(JSON.stringify(res.data, null, 2));
       }
-
-      logger.warn("TS bridge unavailable for profile; using legacy HTTP fallback.");
-      const http = createHttpClient({
-        baseURL: `${String(cfg.baseUrl || "https://graph.facebook.com").replace(/\/+$/, "")}/${String(cfg.graphVersion || "v20.0")}`,
-        token: creds.token
-      });
-      const res = await http.get(`/${creds.phoneNumberId}`);
-      console.log(JSON.stringify(res.data, null, 2));
     });
 
   program
@@ -168,29 +169,20 @@ async function main() {
     .description("list phone numbers for current business")
     .option("--client <name>", "client name (default: active client)")
     .action(async (opts) => {
-      const cfg = await getConfig();
-      const creds = requireClientCreds(cfg, opts.client);
-      const bridge = await loadTsOpsBridge();
-      if (bridge) {
-        const intent = bridge.validateIntent({
-          action: "list_numbers",
-          business_id: String(creds.wabaId || ""),
-          phone_number_id: String(creds.phoneNumberId || ""),
-          payload: {},
-          risk: "LOW"
+      logger.warn("Deprecated path: `waba numbers` now routes to `waba ts numbers`. Use `waba ts numbers` directly.");
+      try {
+        await runTsNumbers({ client: opts.client });
+      } catch (err) {
+        logger.warn(`TS numbers route unavailable, falling back to legacy HTTP path: ${err?.message || err}`);
+        const cfg = await getConfig();
+        const creds = requireClientCreds(cfg, opts.client);
+        const http = createHttpClient({
+          baseURL: `${String(cfg.baseUrl || "https://graph.facebook.com").replace(/\/+$/, "")}/${String(cfg.graphVersion || "v20.0")}`,
+          token: creds.token
         });
-        const out = await bridge.executeIntent(intent, buildTsAgentConfigFromCreds(cfg, creds));
-        console.log(JSON.stringify(out.output, null, 2));
-        return;
+        const res = await http.get(`/${creds.wabaId}/phone_numbers`);
+        console.log(JSON.stringify(res.data, null, 2));
       }
-
-      logger.warn("TS bridge unavailable for numbers; using legacy HTTP fallback.");
-      const http = createHttpClient({
-        baseURL: `${String(cfg.baseUrl || "https://graph.facebook.com").replace(/\/+$/, "")}/${String(cfg.graphVersion || "v20.0")}`,
-        token: creds.token
-      });
-      const res = await http.get(`/${creds.wabaId}/phone_numbers`);
-      console.log(JSON.stringify(res.data, null, 2));
     });
 
   const rawArgs = process.argv.slice(2);

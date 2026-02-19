@@ -6,6 +6,8 @@ const { getConfig, setConfig } = require("../lib/config");
 const { buildReadiness } = require("../lib/readiness");
 const { createRegistry } = require("../lib/tools/registry");
 const { logger } = require("../lib/logger");
+const { createWizardPrompter } = require("../lib/wizard/prompter");
+const { WizardCancelledError } = require("../lib/wizard/prompts");
 const {
   loadTsConfigBridge,
   loadTsDoctorBridge,
@@ -244,7 +246,49 @@ async function runGuidedDemo({ autoFix = false, scopeCheckMode = "best-effort" }
 }
 
 function registerDemoCommands(program) {
-  const d = program.command("demo").description("non-technical demo/testing helpers");
+  const d = program
+    .command("demo")
+    .description("non-technical demo/testing helpers")
+    .action(async (_opts, cmd) => {
+      const root = cmd.parent || program;
+      const json = !!root.opts()?.json;
+      if (json || !process.stdin.isTTY || !process.stdout.isTTY) {
+        logger.info("Demo home:");
+        logger.info("1. waba check");
+        logger.info("2. waba fix");
+        logger.info("3. waba go");
+        logger.info("4. waba whoami");
+        logger.info("5. waba tour");
+        return;
+      }
+
+      const prompter = createWizardPrompter();
+      try {
+        const pick = await prompter.select({
+          message: "WABA Demo Home - choose what to do",
+          options: [
+            { value: "check", label: "Check setup", hint: "quick readiness check" },
+            { value: "fix", label: "Fix setup", hint: "guided repair flow" },
+            { value: "go", label: "Start assistant", hint: "open assistant when ready" },
+            { value: "whoami", label: "Show status", hint: "current setup snapshot" },
+            { value: "tour", label: "Guided tour", hint: "30-second walkthrough" }
+          ],
+          initialValue: "check"
+        });
+
+        if (pick === "check") logger.info("Run now: waba check");
+        else if (pick === "fix") logger.info("Run now: waba fix");
+        else if (pick === "go") logger.info("Run now: waba go");
+        else if (pick === "whoami") logger.info("Run now: waba whoami");
+        else logger.info("Run now: waba tour");
+      } catch (err) {
+        if (err instanceof WizardCancelledError) {
+          logger.warn("Demo menu cancelled.");
+          return;
+        }
+        throw err;
+      }
+    });
 
   d.command("smoke")
     .description("run one-command PASS/FAIL checks for operator demos")

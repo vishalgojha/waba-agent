@@ -156,6 +156,16 @@ If you want exact next commands based on your current setup state:
 waba demo next
 ```
 
+If you want a guided autopilot run (safe checks + runbook in one flow):
+```bash
+waba demo run
+```
+
+Optional safe auto-fix for missing verify token:
+```bash
+waba demo run --auto-fix
+```
+
 This prints plain `PASS`/`FAIL` checks for:
 - Meta credentials readiness
 - webhook verify token presence

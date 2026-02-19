@@ -1,12 +1,14 @@
 const fs = require("fs-extra");
 const path = require("path");
+const crypto = require("crypto");
 
-const { getConfig } = require("../lib/config");
+const { getConfig, setConfig } = require("../lib/config");
 const { buildReadiness } = require("../lib/readiness");
 const { createRegistry } = require("../lib/tools/registry");
 const { logger } = require("../lib/logger");
 const {
   loadTsConfigBridge,
+  loadTsDoctorBridge,
   loadTsOpsBridge,
   loadTsJaspersBridge,
   loadTsTuiBridge
@@ -166,6 +168,68 @@ async function generateDemoNextSteps() {
   };
 }
 
+function base64url(buf) {
+  return Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function runGuidedDemo({ autoFix = false, scopeCheckMode = "best-effort" } = {}) {
+  const actions = [];
+  const warnings = [];
+
+  const beforeCfg = await getConfig();
+  const beforeReadiness = buildReadiness(beforeCfg, {});
+
+  if (autoFix && !beforeReadiness.webhookReady) {
+    const token = base64url(crypto.randomBytes(24));
+    await setConfig({ webhookVerifyToken: token });
+    actions.push("generated_webhook_verify_token");
+  }
+
+  const smoke = await runSmokeChecks();
+
+  const afterCfg = await getConfig();
+  const afterReadiness = buildReadiness(afterCfg, {});
+
+  let doctor = null;
+  if (afterReadiness.metaReady) {
+    try {
+      const ts = await loadTsDoctorBridge();
+      if (!ts) {
+        warnings.push("doctor bridge unavailable; skipped doctor check");
+      } else {
+        const cfg = await ts.readConfig();
+        const report = await ts.runDoctor(cfg, { scopeCheckMode });
+        doctor = {
+          overall: report.overall,
+          tokenValidity: report.tokenValidity,
+          requiredScopes: report.requiredScopes,
+          phoneAccess: report.phoneAccess,
+          webhookConnectivity: report.webhookConnectivity,
+          testSendCapability: report.testSendCapability,
+          rateLimits: report.rateLimits
+        };
+      }
+    } catch (err) {
+      warnings.push(`doctor check failed: ${err?.message || err}`);
+    }
+  } else {
+    warnings.push("meta credentials missing; skipped doctor API checks");
+  }
+
+  const next = await generateDemoNextSteps();
+  const doctorOk = !doctor ? true : doctor.overall !== "FAIL";
+
+  return {
+    actions,
+    warnings,
+    readiness: afterReadiness,
+    smoke,
+    doctor,
+    next,
+    ok: smoke.ok && doctorOk
+  };
+}
+
 function registerDemoCommands(program) {
   const d = program.command("demo").description("non-technical demo/testing helpers");
 
@@ -190,6 +254,59 @@ function registerDemoCommands(program) {
       logger.info(`Summary: ${out.passCount}/${out.total} passed`);
       if (!out.ok) {
         logger.warn("Fix failed checks above, then re-run: waba demo smoke");
+        process.exitCode = 1;
+      }
+    });
+
+  d.command("run")
+    .description("guided autopilot: auto-run safe checks and print exact manual next steps")
+    .option("--auto-fix", "auto-generate webhook verify token if missing", false)
+    .option("--scope-check-mode <mode>", "strict|best-effort", "best-effort")
+    .action(async (opts, cmd) => {
+      const root = cmd.parent?.parent || program;
+      const { json } = root.opts();
+      const out = await runGuidedDemo({
+        autoFix: !!opts.autoFix,
+        scopeCheckMode: String(opts.scopeCheckMode || "best-effort")
+      });
+
+      if (json) {
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify(out, null, 2));
+        if (!out.ok) process.exitCode = 1;
+        return;
+      }
+
+      logger.info("WABA Demo Run");
+      for (const action of out.actions) logger.ok(`AUTO ${action}`);
+
+      logger.info("Smoke checks:");
+      for (const row of out.smoke.checks) {
+        if (row.pass) logger.ok(`PASS ${row.name} - ${row.detail}`);
+        else logger.error(`FAIL ${row.name} - ${row.detail}`);
+      }
+      logger.info(`Smoke summary: ${out.smoke.passCount}/${out.smoke.total} passed`);
+
+      if (out.doctor) {
+        logger.info(`Doctor overall: ${out.doctor.overall}`);
+        logger.info(`- token_validity: ${out.doctor.tokenValidity.ok ? "OK" : "FAIL"} | ${out.doctor.tokenValidity.detail}`);
+        logger.info(`- required_scopes: ${out.doctor.requiredScopes.ok ? "OK" : "FAIL"} | ${out.doctor.requiredScopes.detail}`);
+        logger.info(`- phone_access: ${out.doctor.phoneAccess.ok ? "OK" : "FAIL"} | ${out.doctor.phoneAccess.detail}`);
+        logger.info(`- webhook_connectivity: ${out.doctor.webhookConnectivity.ok ? "OK" : "FAIL"} | ${out.doctor.webhookConnectivity.detail}`);
+        logger.info(`- test_send_capability: ${out.doctor.testSendCapability.ok ? "OK" : "FAIL"} | ${out.doctor.testSendCapability.detail}`);
+        logger.info(`- rate_limits: ${out.doctor.rateLimits.ok ? "OK" : "FAIL"} | ${out.doctor.rateLimits.detail}`);
+      }
+
+      for (const w of out.warnings) logger.warn(w);
+
+      logger.info("Manual next steps:");
+      for (const step of out.next.steps) {
+        logger.info(`${step.id}. ${step.title}`);
+        logger.info(`   ${step.command}`);
+      }
+
+      if (!out.ok) {
+        logger.warn("Demo run has failures. Complete steps above, then re-run: waba demo run");
         process.exitCode = 1;
       }
     });
@@ -220,5 +337,6 @@ function registerDemoCommands(program) {
 module.exports = {
   registerDemoCommands,
   runSmokeChecks,
-  generateDemoNextSteps
+  generateDemoNextSteps,
+  runGuidedDemo
 };

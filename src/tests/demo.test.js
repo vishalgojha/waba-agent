@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { runSmokeChecks, generateDemoNextSteps } = require("../commands/demo");
+const { runSmokeChecks, generateDemoNextSteps, runGuidedDemo } = require("../commands/demo");
 
 test("demo smoke returns structured checks", async () => {
   const out = await runSmokeChecks();
@@ -19,4 +19,14 @@ test("demo next returns ordered actionable steps", async () => {
   assert.equal(out.steps.length >= 3, true);
   assert.equal(out.steps.every((x) => typeof x.id === "number"), true);
   assert.equal(out.steps.every((x) => typeof x.command === "string" && x.command.length > 0), true);
+});
+
+test("demo run returns combined report", async () => {
+  const out = await runGuidedDemo();
+  assert.equal(typeof out.ok, "boolean");
+  assert.equal(Array.isArray(out.actions), true);
+  assert.equal(Array.isArray(out.warnings), true);
+  assert.equal(typeof out.readiness, "object");
+  assert.equal(typeof out.smoke, "object");
+  assert.equal(typeof out.next, "object");
 });

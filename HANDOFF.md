@@ -1,12 +1,12 @@
 # WABA Agent Handoff
 
-Last updated: 2026-02-19
+Last updated: 2026-02-20
 
 ## Snapshot
 - Repo: `waba-agent`
 - Branch: `main`
 - Working tree: clean
-- Latest commit: `1aa69d6` (CI green)
+- Latest commit: `8622100`
 
 ## What shipped in this cycle
 - Beginner-first command surface completed.
@@ -17,6 +17,14 @@ Last updated: 2026-02-19
 - Phase-1 SQLite storage adapter added (dual-write + migration tooling).
 - Ollama made the default AI provider; explicit `aiProvider=ollama` now forces local runtime.
 - Windows `.bat` shortcuts added for non-technical usage.
+- Gateway web launcher hardening for Windows:
+  - keep launcher window open
+  - auto-resolve common port conflicts
+- Control Room UI upgraded to a multi-view operator experience (single static page):
+  - Dashboard view
+  - Chat view (tool-calling chat + approvals queue + execute all)
+  - Campaigns view (create/list)
+  - Settings view (AI defaults + runtime snapshot)
 
 ## New/updated beginner commands
 - `waba check` (quick readiness)
@@ -36,6 +44,10 @@ Last updated: 2026-02-19
 - `waba help me` -> `waba help-me`
 
 ## Key commits (latest first)
+- `8622100` feat(ui): add 4-view control room with chat-first agent flow
+- `77106a8` fix(ui): make agent chat and action panel always visible in control room
+- `9fa9ba8` fix(windows): auto-resolve gateway port conflict in waba-web launcher
+- `4e6ebf1` feat(windows): keep bat windows open and add localhost web launcher
 - `1aa69d6` feat(ux): default to ollama and add windows bat shortcuts
 - `78ea5ca` feat(storage): add sqlite phase-1 adapter with dual-write and migration
 - `6b383a0` feat(ux): add beginner home menu on waba demo
@@ -83,12 +95,14 @@ Last updated: 2026-02-19
 
 ## Files changed (high impact)
 - `src/index.js`
+- `src/server/gateway.js`
 - `src/commands/start.js`
 - `src/commands/demo.js`
 - `src/lib/memory.js`
 - `src/lib/paths.js`
 - `src/lib/config.js`
 - `src/lib/ai/openai.js`
+- `public/waba-gateway-ui.html`
 - `README.md`
 - `package.json`
 
@@ -106,6 +120,23 @@ Last updated: 2026-02-19
   - `waba demo`
   - `waba storage status`
   - `waba storage migrate-memory --dry-run`
+  - `windows\waba-web.bat` (gateway launch and localhost open)
+
+## Current git state
+- Branch: `main`
+- Local ahead of origin by: `1` commit (`8622100`)
+- Push status from this agent environment: blocked by outbound network restriction to `github.com:443`
+- Required on owner machine:
+  1. `cd C:\Users\Vishal Gopal Ojha\waba-agent`
+  2. `git push`
+  3. `windows\waba-web.bat`
+  4. Hard refresh browser (`Ctrl+F5`) on `http://127.0.0.1:3010`
+
+## UI notes (current behavior)
+- Served UI source is `public/waba-gateway-ui.html` (preferred by gateway route).
+- Tabs added in-place (no separate React app folder in this repo).
+- Existing backend endpoints are reused; if an endpoint is unavailable, the UI now surfaces the API error.
+- Chat/tool-calling flow is under `Chat` tab and remains the execution source of truth.
 
 ## Known caveat
 - PowerShell profile warning appears in this environment (`ExecutionPolicy`), but commands execute.

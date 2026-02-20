@@ -126,7 +126,7 @@
       .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; color: var(--muted); }
       .main {
         display: grid;
-        grid-template-rows: auto minmax(220px, 1fr) auto auto;
+        grid-template-rows: auto auto 1fr;
         gap: 12px;
         padding: 14px;
         animation: rise .55s ease both;
@@ -149,6 +149,12 @@
         background: rgba(15,118,110,0.12);
         color: #0f766e;
       }
+      .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+      .tab { border: 1px solid rgba(23,32,42,0.12); background: rgba(255,255,255,0.9); }
+      .tab.active { background: linear-gradient(135deg, var(--brand), var(--brand2)); color: #fff; border-color: transparent; }
+      .view { display: none; min-height: 0; }
+      .view.active { display: grid; gap: 12px; min-height: 0; }
+      .viewChat { grid-template-rows: minmax(220px, 1fr) auto auto; }
       .chat {
         overflow: auto;
         padding: 8px;
@@ -246,6 +252,13 @@
         max-height: 200px;
       }
       .hint { color: var(--muted); font-size: 12px; }
+      .kpiGrid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; }
+      .kpiCard { border-radius: 12px; padding: 12px; background: rgba(255,255,255,0.8); border: 1px solid rgba(23,32,42,0.08); }
+      .kpiCard .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+      .kpiCard .v { margin-top: 6px; font-size: 22px; font-weight: 700; }
+      .dashboardGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .campaignForm { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .campaignFull { grid-column: 1 / -1; }
       .stagger > * { opacity: 0; transform: translateY(8px); animation: rise .38s ease forwards; }
       .stagger > *:nth-child(2) { animation-delay: .04s; }
       .stagger > *:nth-child(3) { animation-delay: .08s; }
@@ -292,6 +305,7 @@
         body { overflow: auto; }
         .layout { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
         .main { min-height: 72vh; }
+        .dashboardGrid, .kpiGrid { grid-template-columns: 1fr; }
       }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after {
@@ -343,38 +357,120 @@
 
       <main class="panel main">
         <div class="topbar">
-          <div class="title">Conversational Control Room</div>
+          <div class="title">WABA Control Room</div>
           <div class="pill" id="sessionBadge">No session</div>
           <label class="pill" style="cursor:pointer;">
             <input id="allowHighRisk" type="checkbox" style="vertical-align:middle; margin-right:6px;" />
             Allow high-risk execute
           </label>
         </div>
+        <div class="tabs">
+          <button class="tab active" data-view="dashboard">Dashboard</button>
+          <button class="tab" data-view="chat">Chat</button>
+          <button class="tab" data-view="campaigns">Campaigns</button>
+          <button class="tab" data-view="settings">Settings</button>
+        </div>
 
-        <section class="chat" id="chatLog"></section>
-
-        <section class="actions" id="actionsBox">
-          <h3 style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-            <span>Proposed Actions</span>
-            <span class="mono" id="queueCount">0 pending</span>
-          </h3>
-          <div id="actionList"></div>
-          <div style="display:flex; gap:8px;">
-            <button class="btnPrimary" id="execAllBtn" disabled>Execute All</button>
-            <button class="btnGhost" id="clearActionsBtn">Clear</button>
+        <section class="view active" id="viewDashboard">
+          <div class="kpiGrid">
+            <div class="kpiCard"><div class="k">Missed Leads</div><div class="v" id="dMissed">-</div></div>
+            <div class="kpiCard"><div class="k">Inbound</div><div class="v" id="dLeads">-</div></div>
+            <div class="kpiCard"><div class="k">Avg Response</div><div class="v" id="dResp">-</div></div>
+            <div class="kpiCard"><div class="k">Re-engaged</div><div class="v" id="dReengaged">-</div></div>
           </div>
-          <div class="hint">Approve/reject individually, or execute entire queue.</div>
+          <div class="dashboardGrid">
+            <div class="actions">
+              <h3>Quick Actions</h3>
+              <div class="btnRow">
+                <button class="btnPrimary" id="openChatBtn">Open Chat</button>
+                <button class="btnGhost" id="openCampaignsBtn">Open Campaigns</button>
+              </div>
+              <div class="btnRow">
+                <button class="btnGhost" id="refreshDashBtn">Refresh Health</button>
+                <button class="btnGhost" id="openSettingsBtn">Open Settings</button>
+              </div>
+            </div>
+            <div class="actions">
+              <h3>Recent Sessions</h3>
+              <div class="sessions" id="sessionListDashboard"></div>
+            </div>
+          </div>
         </section>
 
-        <section class="composerSection">
-          <h3 class="composerHeader">Agent Chat (Tool Calling)</h3>
-          <div class="quick" id="quickChips"></div>
-          <div style="height:8px;"></div>
-          <div class="composer">
-            <textarea id="msgInput" placeholder="Type naturally. Example: I got 5 new leads from 99acres for ACME"></textarea>
-            <button class="btnPrimary" id="sendBtn">Send</button>
+        <section class="view viewChat" id="viewChat">
+          <section class="chat" id="chatLog"></section>
+
+          <section class="actions" id="actionsBox">
+            <h3 style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span>Proposed Actions</span>
+              <span class="mono" id="queueCount">0 pending</span>
+            </h3>
+            <div id="actionList"></div>
+            <div style="display:flex; gap:8px;">
+              <button class="btnPrimary" id="execAllBtn" disabled>Execute All</button>
+              <button class="btnGhost" id="clearActionsBtn">Clear</button>
+            </div>
+            <div class="hint">Approve/reject individually, or execute entire queue.</div>
+          </section>
+
+          <section class="composerSection">
+            <h3 class="composerHeader">Agent Chat (Tool Calling)</h3>
+            <div class="quick" id="quickChips"></div>
+            <div style="height:8px;"></div>
+            <div class="composer">
+              <textarea id="msgInput" placeholder="Type naturally. Example: I got 5 new leads from 99acres for ACME"></textarea>
+              <button class="btnPrimary" id="sendBtn">Send</button>
+            </div>
+            <div class="hint">Enter to send. Shift+Enter for newline.</div>
+          </section>
+        </section>
+
+        <section class="view" id="viewCampaigns">
+          <div class="dashboardGrid">
+            <div class="actions">
+              <h3>Create Campaign</h3>
+              <div class="campaignForm">
+                <input id="campaignName" placeholder="Campaign name" />
+                <input id="campaignTemplate" placeholder="Template name" />
+                <input id="campaignRecipients" class="campaignFull" placeholder="Recipients comma separated (+91...)" />
+                <input id="campaignSchedule" type="datetime-local" />
+                <button class="btnPrimary" id="createCampaignBtn">Create</button>
+              </div>
+            </div>
+            <div class="actions">
+              <h3>Campaigns</h3>
+              <div id="campaignList" class="sessions"></div>
+            </div>
           </div>
-          <div class="hint">Enter to send. Shift+Enter for newline.</div>
+        </section>
+
+        <section class="view" id="viewSettings">
+          <div class="dashboardGrid">
+            <div class="actions">
+              <h3>AI Settings</h3>
+              <label class="mono">Provider</label>
+              <select id="aiProvider">
+                <option value="ollama" selected>Ollama (Local)</option>
+                <option value="openai">OpenAI</option>
+                <option value="compatible">OpenAI-compatible</option>
+              </select>
+              <label class="mono" style="display:block;margin-top:8px;">Model</label>
+              <input id="aiModel" value="qwen2.5:7b" />
+              <div class="btnRow">
+                <button class="btnPrimary" id="saveAiBtn">Save Local</button>
+                <button class="btnGhost" id="reloadSettingsBtn">Reload</button>
+              </div>
+            </div>
+            <div class="actions">
+              <h3>Runtime</h3>
+              <div class="mono">Webhook URL</div>
+              <div id="webhookUrl" style="margin:6px 0 10px;">-</div>
+              <div class="mono">Gateway Health</div>
+              <div id="gatewayHealth" style="margin:6px 0 10px;">-</div>
+              <div class="mono">Config Snapshot</div>
+              <textarea id="configSnapshot" rows="8" readonly></textarea>
+            </div>
+          </div>
         </section>
       </main>
     </div>
@@ -387,10 +483,12 @@
       const state = {
         sessionId: null,
         actions: [],
+        view: "dashboard",
         resale: {
           magicEnabled: false,
           share: null
         },
+        campaigns: [],
         req: {
           summary: 0,
           sessions: 0
@@ -489,6 +587,24 @@
 
       function setSessionBadge() {
         $("sessionBadge").textContent = state.sessionId ? ("Session " + state.sessionId) : "No session";
+      }
+
+      function setView(view) {
+        state.view = view;
+        const map = {
+          dashboard: "viewDashboard",
+          chat: "viewChat",
+          campaigns: "viewCampaigns",
+          settings: "viewSettings"
+        };
+        for (const [name, id] of Object.entries(map)) {
+          $(id).classList.toggle("active", name === view);
+        }
+        for (const btn of document.querySelectorAll(".tab")) {
+          btn.classList.toggle("active", btn.dataset.view === view);
+        }
+        if (view === "campaigns") refreshCampaigns().catch((err) => toast("err", err.message));
+        if (view === "settings") refreshSettings().catch((err) => toast("err", err.message));
       }
 
       function actionRisk(action) {
@@ -685,17 +801,28 @@
       async function refreshSummary() {
         const ticket = ++state.req.summary;
         const client = $("clientInput").value.trim() || "default";
-        withSkeleton(["sMissed", "sLeads", "sResp", "sReengaged", "sQualified"], true);
+        withSkeleton(["sMissed", "sLeads", "sResp", "sReengaged", "sQualified", "dMissed", "dLeads", "dResp", "dReengaged"], true);
         try {
           const summary = await api("/api/summary?client=" + encodeURIComponent(client) + "&days=30");
           if (ticket !== state.req.summary) return;
-          $("sMissed").textContent = String(summary.missedLeads || 0);
-          $("sLeads").textContent = String(summary.metrics?.leads?.inboundMessages ?? "-");
+          const missed = String(summary.missedLeads || 0);
+          const leads = String(summary.metrics?.leads?.inboundMessages ?? "-");
           const avg = summary.metrics?.responses?.avgMinutes;
-          $("sResp").textContent = Number.isFinite(avg) ? (avg.toFixed(1) + "m") : "-";
+          const resp = Number.isFinite(avg) ? (avg.toFixed(1) + "m") : "-";
           const rm = summary.resale_metrics || {};
-          $("sReengaged").textContent = String(rm.contacts_reengaged ?? "-");
-          $("sQualified").textContent = String(rm.qualified_leads ?? "-");
+          const reengaged = String(rm.contacts_reengaged ?? "-");
+          const qualified = String(rm.qualified_leads ?? "-");
+
+          $("sMissed").textContent = missed;
+          $("sLeads").textContent = leads;
+          $("sResp").textContent = resp;
+          $("sReengaged").textContent = reengaged;
+          $("sQualified").textContent = qualified;
+
+          $("dMissed").textContent = missed;
+          $("dLeads").textContent = leads;
+          $("dResp").textContent = resp;
+          $("dReengaged").textContent = reengaged;
           state.resale.magicEnabled = summary.resale_magic_mode === true;
           $("magicToggleBtn").textContent = state.resale.magicEnabled ? "Magic Mode: ON" : "Magic Mode: OFF";
           if (state.resale.magicEnabled) {
@@ -706,7 +833,7 @@
           }
         } finally {
           if (ticket === state.req.summary) {
-            withSkeleton(["sMissed", "sLeads", "sResp", "sReengaged", "sQualified"], false);
+            withSkeleton(["sMissed", "sLeads", "sResp", "sReengaged", "sQualified", "dMissed", "dLeads", "dResp", "dReengaged"], false);
           }
         }
       }
@@ -769,13 +896,17 @@
         const ticket = ++state.req.sessions;
         const client = $("clientInput").value.trim() || "default";
         const box = $("sessionList");
+        const boxDash = $("sessionListDashboard");
         box.innerHTML = "<div class='empty'>Loading sessions...</div>";
+        boxDash.innerHTML = "<div class='empty'>Loading sessions...</div>";
         try {
           const out = await api("/api/sessions?client=" + encodeURIComponent(client));
           if (ticket !== state.req.sessions) return;
           box.innerHTML = "";
+          boxDash.innerHTML = "";
           if (!(out.sessions || []).length) {
             box.innerHTML = "<div class='empty'>No recent sessions.</div>";
+            boxDash.innerHTML = "<div class='empty'>No recent sessions.</div>";
             return;
           }
           for (const s of out.sessions || []) {
@@ -786,30 +917,107 @@
               escapeHtml(s.language + " | msgs " + s.messages + " | " + (s.lastUsedAt || "")) + "</div>";
             row.onclick = () => startSession({ sessionId: s.id, language: s.language || "en" }).catch((err) => toast("err", err.message));
             box.appendChild(row);
+            boxDash.appendChild(row.cloneNode(true));
+            boxDash.lastChild.onclick = row.onclick;
           }
         } catch (err) {
           if (ticket === state.req.sessions) {
             box.innerHTML = "<div class='empty'>Could not load sessions.</div>";
+            boxDash.innerHTML = "<div class='empty'>Could not load sessions.</div>";
           }
           throw err;
         }
+      }
+
+      async function refreshCampaigns() {
+        const client = $("clientInput").value.trim() || "default";
+        const box = $("campaignList");
+        box.innerHTML = "<div class='empty'>Loading campaigns...</div>";
+        const out = await api("/api/campaigns?client=" + encodeURIComponent(client)).catch(() => ({ campaigns: [] }));
+        state.campaigns = Array.isArray(out?.campaigns) ? out.campaigns : [];
+        if (!state.campaigns.length) {
+          box.innerHTML = "<div class='empty'>No campaigns found.</div>";
+          return;
+        }
+        box.innerHTML = "";
+        for (const c of state.campaigns) {
+          const row = document.createElement("div");
+          row.className = "sessionItem";
+          row.innerHTML = "<div><strong>" + escapeHtml(c.name || c.id || "Campaign") + "</strong></div><div class='mono'>" +
+            escapeHtml("template " + String(c.template || c.template_name || "-") + " | status " + String(c.status || "pending")) + "</div>";
+          box.appendChild(row);
+        }
+      }
+
+      async function createCampaign() {
+        const client = $("clientInput").value.trim() || "default";
+        const name = $("campaignName").value.trim();
+        const template = $("campaignTemplate").value.trim();
+        const recipients = $("campaignRecipients").value.trim().split(",").map((v) => v.trim()).filter(Boolean);
+        const scheduleRaw = $("campaignSchedule").value;
+        if (!name || !template || !recipients.length) {
+          toast("warn", "Enter campaign name, template and recipients.");
+          return;
+        }
+        const payload = { client, name, template, recipients };
+        if (scheduleRaw) payload.scheduleAt = new Date(scheduleRaw).toISOString();
+        await api("/api/campaigns", { method: "POST", body: payload });
+        toast("ok", "Campaign created.");
+        $("campaignName").value = "";
+        $("campaignRecipients").value = "";
+        $("campaignSchedule").value = "";
+        await refreshCampaigns();
+      }
+
+      async function refreshSettings() {
+        const cfg = await api("/api/config").catch(() => ({}));
+        const health = await api("/api/health").catch(() => ({}));
+        $("webhookUrl").textContent = String(cfg?.webhookUrl || cfg?.webhook_url || "Not configured");
+        $("gatewayHealth").textContent = health?.ok ? "Healthy" : "Unknown";
+        $("configSnapshot").value = JSON.stringify(cfg || {}, null, 2);
       }
 
       async function loadConfig() {
         try {
           const cfg = await api("/api/config");
           if (cfg?.activeClient) $("clientInput").value = cfg.activeClient;
+          if (cfg?.language) $("langInput").value = cfg.language;
         } catch {}
       }
 
-      $("startBtn").onclick = () => startSession().catch(err => toast("err", err.message));
-      $("refreshBtn").onclick = () => Promise.all([refreshSummary(), refreshSessions()]).catch(err => toast("err", err.message));
+      function loadLocalAiSettings() {
+        try {
+          const raw = localStorage.getItem("waba.ai.settings");
+          if (!raw) return;
+          const obj = JSON.parse(raw);
+          if (obj?.provider) $("aiProvider").value = obj.provider;
+          if (obj?.model) $("aiModel").value = obj.model;
+        } catch {}
+      }
+
+      $("startBtn").onclick = () => startSession().then(() => setView("chat")).catch(err => toast("err", err.message));
+      $("refreshBtn").onclick = () => Promise.all([refreshSummary(), refreshSessions(), refreshCampaigns(), refreshSettings()]).catch(err => toast("err", err.message));
       $("magicToggleBtn").onclick = () => toggleMagicMode().catch(err => toast("err", err.message));
       $("importResaleBtn").onclick = () => importResaleLeadsQuick().catch(err => toast("err", err.message));
-      $("shareWinBtn").onclick = () => shareWinCard().catch(err => toast("err", err.message));
       $("sendBtn").onclick = () => sendMessage().catch(err => toast("err", err.message));
       $("execAllBtn").onclick = () => executeAll().catch(err => toast("err", err.message));
       $("clearActionsBtn").onclick = () => { state.actions = []; renderActions(); toast("warn", "Queue cleared locally."); };
+      $("createCampaignBtn").onclick = () => createCampaign().catch(err => toast("err", err.message));
+      $("saveAiBtn").onclick = () => {
+        localStorage.setItem("waba.ai.settings", JSON.stringify({ provider: $("aiProvider").value, model: $("aiModel").value }));
+        toast("ok", "Saved local AI settings.");
+      };
+      $("reloadSettingsBtn").onclick = () => refreshSettings().catch(err => toast("err", err.message));
+
+      $("openChatBtn").onclick = () => setView("chat");
+      $("openCampaignsBtn").onclick = () => setView("campaigns");
+      $("openSettingsBtn").onclick = () => setView("settings");
+      $("refreshDashBtn").onclick = () => Promise.all([refreshSummary(), refreshSessions()]).then(() => toast("ok", "Refreshed.")).catch(err => toast("err", err.message));
+
+      for (const btn of document.querySelectorAll(".tab")) {
+        btn.onclick = () => setView(btn.dataset.view);
+      }
+
       $("msgInput").addEventListener("keydown", (ev) => {
         if (ev.key === "Enter" && !ev.shiftKey) {
           ev.preventDefault();
@@ -822,9 +1030,13 @@
 
       (async () => {
         try {
+          loadLocalAiSettings();
           await loadConfig();
           clearChatWithEmpty("Initializing gateway session...");
+          renderActions();
+          setView("dashboard");
           await startSession();
+          await Promise.all([refreshCampaigns(), refreshSettings()]);
           setInterval(() => refreshSummary().catch(() => {}), 25000);
         } catch (err) {
           addMessage("agent", "Gateway init failed: " + err.message);

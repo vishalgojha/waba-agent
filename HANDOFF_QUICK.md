@@ -1,34 +1,24 @@
 # HANDOFF QUICK
 
-## Repo
-- `waba-agent` (branch: `main`)
-- Primary file changed: `public/waba-gateway-ui.html`
+## Current state
+- Repo: `waba-agent` (`main`)
+- Latest pushed commit: `d45c062`
+- `origin/main` matches local `HEAD`
+- Local untracked file only: `.npmrc` (registry override)
 
-## What changed
-- Gateway token shortcut now targets: `https://business.facebook.com/latest/settings/system_users`
-- AI fallback commands improved in `src/lib/chat/agent.js`
-  - `whoami`, `show templates`, `show memory`, `send welcome text to +<number>`
-- Chat/UI reliability fixes: scroll visibility, null-ID crashes, dark toggle wiring.
-- Redesign merge backup: `public/waba-gateway-ui.pre-redesign.backup.html`
+## Completed
+- OpenRouter added for CLI/gateway/frontend flow.
+- Frontend AI config wiring added.
+- Ollama startup/fallback improvements added.
+- Gateway UI mission-control updates + chat visibility/scroll/dark-mode fixes present.
+- Token quick-launch points to Meta system-user token path.
+- Unrelated workspace folders removed (`windows/openclaw`, `windows/propai-tech`).
 
-## Tests (latest)
-- `npm run test:gateway` ?
-- `npm run test:chat` ?
+## User helper scripts (outside repo)
+- `C:\Users\Vishal Gopal Ojha\fix-localhost.bat`
+- `C:\Users\Vishal Gopal Ojha\start-waba.bat`
 
-## Known caveats
-- Meta may still redirect based on account/business context.
-- If chat says "AI parsing issue", runtime model endpoint is not available to current gateway process.
-
-## Next agent first steps
-1. Run gateway:
-   - `npm start -- gw -c acme-realty --port 3011`
-2. Hard refresh browser (`Ctrl+F5`).
-3. Validate chat commands:
-   - `whoami`
-   - `show templates`
-   - `show memory`
-   - `send welcome text to +919812345678`
-4. Validate token button landing path.
-
-## Working tree note
-- Repo has unrelated modified/untracked files; separate intentional changes before commit.
+## Next steps
+1. Run `npm start` and verify chat response path (no repeated parsing fallback).
+2. Re-test Settings token shortcut with real Meta account context.
+3. If fallback persists, check provider + model availability first.

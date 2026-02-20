@@ -1,118 +1,60 @@
 # WABA Agent Handoff
 
-Last updated: 2026-02-20
+Last updated: 2026-02-21
 
 ## Snapshot
 - Repo: `waba-agent`
 - Branch: `main`
-- Focus area in this handoff: gateway UI + AI fallback behavior
-- Latest commit currently on branch: `f584038`
-- Working tree is **not clean** (see `git status --short`)
+- Latest pushed commit: `d45c062`
+- Remote: `origin/main` is in sync with local `HEAD`
+- Working tree: clean except local untracked `.npmrc` (project registry config)
 
-## What was done in this session
-1. Gateway token quick-launch routing
-- Updated token shortcut target from Meta app listing flow to direct system-user token page:
-  - `public/waba-gateway-ui.html`
-  - `META_TOKEN_URL = https://business.facebook.com/latest/settings/system_users`
+## What is completed
+1. Gateway + AI integration
+- Frontend AI provider wiring added.
+- OpenRouter support added across CLI/gateway/frontend paths.
+- Ollama autostart/fallback flow improved.
 
-2. AI fallback behavior improved
-- Root issue: when AI provider/model unavailable, user saw fallback line repeatedly and suggested commands were not always actionable.
-- Updated heuristic fallback in:
-  - `src/lib/chat/agent.js`
-- Added/strengthened direct commands in fallback path:
-  - `whoami`
-  - `show templates`
-  - `show memory`
-  - `send welcome text to +<number>`
-- `send welcome text` now attempts known lead phone from context if explicit number missing.
+2. Gateway UI and token flow
+- Mission-control style gateway UI updates are in place.
+- Token quick-launch routing updated to Meta system user/token flow URL.
+- Chat area visibility/scroll and dark mode toggle fixes were applied in prior session scope.
 
-3. Chat/UI reliability fixes
-- Addressed repeated UI issues: hidden chat area, missing scroll, null element errors, dark mode toggle.
-- Reworked `public/waba-gateway-ui.html` to a mission-control style layout while preserving all backend-required IDs and handlers.
-- Fixed null crash source (`sessionList` lifecycle issue).
-- Rewired dark mode toggle using `html.dark` + `localStorage`.
-- Kept compatibility IDs for existing gateway JS contract.
+3. Operational simplification for user
+- One-click local recovery/start scripts created at user level (not in repo):
+  - `C:\Users\Vishal Gopal Ojha\fix-localhost.bat`
+  - `C:\Users\Vishal Gopal Ojha\start-waba.bat`
 
-4. Redesign ZIP merge
-- Imported user-provided redesign ZIP and merged selectively.
-- Preserved production gateway script block from working UI.
-- Added compatibility nodes for IDs expected by script.
-- Backup created:
-  - `public/waba-gateway-ui.pre-redesign.backup.html`
-
-## Test status
-Executed and passing in this session:
-- `npm run test:gateway` ? (multiple runs)
-- `npm run test:chat` ?
-
-Common warning seen during tests:
-- Ollama model fallback warnings (`deepseek-coder-v2:16b` / `qwen2.5:7b`) if model not available in runtime.
-
-## Current known issues / caveats
-1. Meta routing caveat
-- Even with direct URL, Meta may still redirect based on account/business context. If this happens, next step is appending business context params (business id) after confirming user’s exact Meta tenant path.
-
-2. Runtime AI availability
-- If user sees `I hit an AI parsing issue...`, verify the running gateway process has environment variables set and can access the model endpoint (`OPENAI_BASE_URL`, model availability).
-
-3. Working tree contains unrelated changes
-Current `git status --short` includes:
-- Modified:
-  - `.agent/production-validation-latest.json`
-  - `README.md`
-  - `public/waba-gateway-ui.html`
-  - `src/lib/chat/agent.js`
-  - `src/lib/db/sqlite-store.js`
-  - `src/tests/chat.test.js`
-- Untracked:
-  - `docs/AI_RESPONSE_TEMPLATE.md`
-  - `docs/PROMPT_EVOLUTION_TEMPLATE.md`
-  - `frontend/`
-  - `public/waba-gateway-ui.pre-redesign.backup.html`
+4. Repo hygiene
+- Unrelated folders removed from repo workspace:
   - `windows/openclaw/`
   - `windows/propai-tech/`
 
-Next agent should review and separate intentional vs unrelated edits before committing.
+## Current known caveats
+1. Model availability is still runtime-dependent
+- If gateway logs show model-not-found for Ollama/OpenRouter, chat falls back to direct commands.
+- Ensure selected model exists for chosen provider.
 
-## Files touched for this handoff scope
-- `public/waba-gateway-ui.html`
-- `src/lib/chat/agent.js`
-- `src/tests/chat.test.js`
+2. Local `.npmrc` is intentionally untracked
+- Contains project-level npm registry override (`https://registry.npmjs.org/`).
+- Do not commit unless team wants registry pinned in repo.
 
-## Exact runbook for next agent
-1. Start/verify gateway
-- If port busy, use alternate port.
-- Recommended:
-  - `npm start -- gw -c acme-realty --port 3011`
+## Next agent checklist
+1. Verify AI path end-to-end
+- Start app and run one normal chat message.
+- Confirm no repeated `I hit an AI parsing issue...` fallback.
 
-2. Browser refresh
-- Open gateway URL and hard refresh (`Ctrl+F5`).
+2. Validate token quick-launch UX
+- From Settings, click token shortcut and confirm destination behavior for this Meta account context.
 
-3. Validate fallback commands from Chat tab
-- `whoami`
-- `show templates`
-- `show memory`
-- `send welcome text to +919812345678`
+3. Optional quality pass
+- Add inline settings helper text for provider/model mismatch.
+- Add explicit "AI Health" check in UI (provider reachable + model exists).
 
-4. Validate token shortcut flow
-- Click `Get Meta Tokens`
-- Confirm landing behavior with user’s logged-in Meta account.
+## Commands reference
+- Start app: `npm start`
+- Test gateway: `npm run test:gateway`
+- Check sync: `git log -1 --oneline` and `git ls-remote --heads origin main`
 
-5. Validate UI fundamentals
-- Chat panel visible
-- Chat scroll works
-- Action panel scroll works
-- Dark mode toggle works
-
-## Suggested next tasks
-1. Add explicit "AI Health" card/button in Settings
-- Probe model endpoint and render one-click diagnosis (base URL reachable, model exists, provider vars).
-
-2. Make token deep-link business-aware
-- If user provides `businessAccountId`, build deterministic URL including business context.
-
-3. Reduce compatibility debt in UI
-- Replace hidden compatibility nodes with first-class rendered nodes; keep one source-of-truth layout.
-
-## Note
-- PowerShell profile warning (`ExecutionPolicy`) appears in this environment but commands still execute.
+## Notes
+- PowerShell execution-policy warning appears in this environment but does not block `.cmd` commands.

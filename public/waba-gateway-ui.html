@@ -131,6 +131,7 @@
         padding: 14px;
         animation: rise .55s ease both;
         min-height: 0;
+        overflow: hidden;
       }
       .topbar {
         display: grid;
@@ -153,8 +154,8 @@
       .tab { border: 1px solid rgba(23,32,42,0.12); background: rgba(255,255,255,0.9); }
       .tab.active { background: linear-gradient(135deg, var(--brand), var(--brand2)); color: #fff; border-color: transparent; }
       .view { display: none; min-height: 0; }
-      .view.active { display: grid; gap: 12px; min-height: 0; }
-      .viewChat { grid-template-rows: minmax(220px, 1fr) auto auto; }
+      .view.active { display: grid; gap: 12px; min-height: 0; overflow: auto; }
+      .viewChat { grid-template-rows: minmax(180px, 42vh) auto auto; align-content: start; }
       .chat {
         overflow: auto;
         padding: 8px;
@@ -305,6 +306,7 @@
         body { overflow: auto; }
         .layout { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
         .main { min-height: 72vh; }
+        .viewChat { grid-template-rows: minmax(180px, 48vh) auto auto; }
         .dashboardGrid, .kpiGrid { grid-template-columns: 1fr; }
       }
       @media (prefers-reduced-motion: reduce) {
@@ -447,6 +449,20 @@
         <section class="view" id="viewSettings">
           <div class="dashboardGrid">
             <div class="actions">
+              <h3>Meta Credentials</h3>
+              <label class="mono">Token</label>
+              <input id="metaToken" type="password" placeholder="Paste permanent token" />
+              <div class="hint" id="metaTokenHint" style="margin-top:6px;">Not set</div>
+              <label class="mono" style="display:block;margin-top:8px;">Phone Number ID</label>
+              <input id="metaPhoneId" placeholder="Digits only" />
+              <label class="mono" style="display:block;margin-top:8px;">WABA ID</label>
+              <input id="metaWabaId" placeholder="Digits only" />
+              <div class="btnRow">
+                <button class="btnPrimary" id="saveMetaBtn">Save Meta</button>
+                <button class="btnGhost" id="reloadMetaBtn">Reload</button>
+              </div>
+            </div>
+            <div class="actions">
               <h3>AI Settings</h3>
               <label class="mono">Provider</label>
               <select id="aiProvider">
@@ -461,7 +477,7 @@
                 <button class="btnGhost" id="reloadSettingsBtn">Reload</button>
               </div>
             </div>
-            <div class="actions">
+            <div class="actions campaignFull">
               <h3>Runtime</h3>
               <div class="mono">Webhook URL</div>
               <div id="webhookUrl" style="margin:6px 0 10px;">-</div>
@@ -975,6 +991,36 @@
         $("webhookUrl").textContent = String(cfg?.webhookUrl || cfg?.webhook_url || "Not configured");
         $("gatewayHealth").textContent = health?.ok ? "Healthy" : "Unknown";
         $("configSnapshot").value = JSON.stringify(cfg || {}, null, 2);
+        await refreshMetaCredentials();
+      }
+
+      async function refreshMetaCredentials() {
+        const client = $("clientInput").value.trim() || "default";
+        const creds = await api("/api/clients/" + encodeURIComponent(client) + "/credentials").catch(() => ({}));
+        $("metaToken").value = "";
+        $("metaPhoneId").value = String(creds?.phoneNumberId || "");
+        $("metaWabaId").value = String(creds?.wabaId || "");
+        $("metaTokenHint").textContent = creds?.hasToken
+          ? ("Saved token: " + String(creds?.tokenMasked || "***"))
+          : "No token saved for this client";
+      }
+
+      async function saveMetaCredentials() {
+        const client = $("clientInput").value.trim() || "default";
+        const token = $("metaToken").value.trim();
+        const phoneNumberId = $("metaPhoneId").value.trim();
+        const wabaId = $("metaWabaId").value.trim();
+        if (!token || !phoneNumberId || !wabaId) {
+          toast("warn", "Enter token, phone number ID, and WABA ID.");
+          return;
+        }
+        await api("/api/clients/" + encodeURIComponent(client) + "/credentials", {
+          method: "POST",
+          body: { token, phoneNumberId, wabaId, makeActive: true }
+        });
+        $("metaToken").value = "";
+        toast("ok", "Meta credentials saved.");
+        await Promise.all([loadConfig(), refreshSettings()]);
       }
 
       async function loadConfig() {
@@ -1008,6 +1054,8 @@
         toast("ok", "Saved local AI settings.");
       };
       $("reloadSettingsBtn").onclick = () => refreshSettings().catch(err => toast("err", err.message));
+      $("saveMetaBtn").onclick = () => saveMetaCredentials().catch(err => toast("err", err.message));
+      $("reloadMetaBtn").onclick = () => refreshMetaCredentials().catch(err => toast("err", err.message));
 
       $("openChatBtn").onclick = () => setView("chat");
       $("openCampaignsBtn").onclick = () => setView("campaigns");

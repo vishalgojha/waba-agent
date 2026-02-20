@@ -4,9 +4,11 @@ const path = require("path");
 
 const { logger } = require("../lib/logger");
 const { getConfig } = require("../lib/config");
+const { addOrUpdateClient } = require("../lib/clients");
 const { computeMetrics } = require("../lib/analytics");
 const { getMissedLeads } = require("../lib/followup");
 const { safeClientName } = require("../lib/creds");
+const { redactToken } = require("../lib/redact");
 const { PersistentMemory, sessionPath } = require("../lib/chat/memory");
 const { GatewaySessionManager } = require("../lib/chat/gateway");
 const { getClientConfig } = require("../lib/client-config");
@@ -24,6 +26,22 @@ const pkg = require("../../package.json");
 const { initObservability } = require("../lib/observability");
 const { createRateLimitMiddleware, getRequestClientKey } = require("../lib/http-rate-limit");
 const { createExecutionQueue } = require("../lib/queue/execution-queue");
+
+function normalizeClientCreds(cfg, clientName) {
+  const c = safeClientName(clientName || cfg?.activeClient || "default");
+  const rec = cfg?.clients?.[c] || {};
+  return {
+    client: c,
+    hasToken: !!rec.token,
+    tokenMasked: rec.token ? redactToken(rec.token) : null,
+    phoneNumberId: rec.phoneNumberId || null,
+    wabaId: rec.wabaId || null
+  };
+}
+
+function isDigits(value) {
+  return /^\d+$/.test(String(value || "").trim());
+}
 
 function gatewayHtml(defaultClient, defaultLanguage) {
   const client = String(defaultClient || "default");
@@ -585,16 +603,69 @@ async function startGatewayServer({ host = "127.0.0.1", port = 3010, client = "d
     });
   });
 
-  app.get("/api/config", (_req, res) => {
+  app.get("/api/config", async (_req, res) => {
+    const current = await getConfig();
+    const creds = normalizeClientCreds(current, current.activeClient || "default");
     res.json({
       ok: true,
-      activeClient: cfg.activeClient || "default",
-      graphVersion: cfg.graphVersion || "v20.0",
-      hasToken: !!cfg.token,
-      hasOpenAi: !!cfg.openaiApiKey,
-      hasAi: hasAiProviderConfigured(cfg),
-      aiProvider: cfg.aiProvider || null
+      activeClient: current.activeClient || "default",
+      graphVersion: current.graphVersion || "v20.0",
+      hasToken: creds.hasToken,
+      hasOpenAi: !!current.openaiApiKey,
+      hasAi: hasAiProviderConfigured(current),
+      aiProvider: current.aiProvider || null,
+      webhookUrl: current.lastPublicWebhookUrl || current.webhookUrl || null
     });
+  });
+
+  app.get("/api/clients/:client/credentials", async (req, res) => {
+    try {
+      const current = await getConfig();
+      const c = safeClientName(req.params.client || current.activeClient || "default");
+      const out = normalizeClientCreds(current, c);
+      res.json({ ok: true, ...out });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  app.post("/api/clients/:client/credentials", async (req, res) => {
+    try {
+      const current = await getConfig();
+      const c = safeClientName(req.params.client || current.activeClient || "default");
+      const token = String(req.body?.token || "").trim();
+      const phoneNumberId = String(req.body?.phoneNumberId || req.body?.phoneId || "").trim();
+      const wabaId = String(req.body?.wabaId || req.body?.businessId || "").trim();
+
+      if (!token) {
+        res.status(400).json({ ok: false, error: "token_required" });
+        return;
+      }
+      if (!phoneNumberId || !isDigits(phoneNumberId)) {
+        res.status(400).json({ ok: false, error: "phone_number_id_invalid" });
+        return;
+      }
+      if (!wabaId || !isDigits(wabaId)) {
+        res.status(400).json({ ok: false, error: "waba_id_invalid" });
+        return;
+      }
+
+      await addOrUpdateClient(
+        c,
+        {
+          token,
+          phoneNumberId,
+          wabaId
+        },
+        { makeActive: req.body?.makeActive !== false }
+      );
+
+      const latest = await getConfig();
+      const out = normalizeClientCreds(latest, c);
+      res.json({ ok: true, saved: true, ...out, activeClient: latest.activeClient || c });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
   });
 
   app.get("/api/sessions", async (req, res) => {

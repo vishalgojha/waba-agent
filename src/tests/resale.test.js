@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const dayjs = require("dayjs");
 
 const {
   parseCsv,
@@ -16,9 +17,10 @@ test("resale parseCsv parses basic rows", () => {
 });
 
 test("classifyRecencyBucket maps dates", () => {
-  assert.equal(classifyRecencyBucket("2026-02-15T10:00:00+05:30"), "recent_0_6");
-  assert.equal(classifyRecencyBucket("2026-01-20T10:00:00+05:30"), "warm_7_30");
-  assert.equal(classifyRecencyBucket("2025-12-01T10:00:00+05:30"), "older_30_plus");
+  const now = dayjs("2026-02-20T10:00:00+05:30");
+  assert.equal(classifyRecencyBucket(now.subtract(2, "day").toISOString(), now), "recent_0_6");
+  assert.equal(classifyRecencyBucket(now.subtract(20, "day").toISOString(), now), "warm_7_30");
+  assert.equal(classifyRecencyBucket(now.subtract(60, "day").toISOString(), now), "older_30_plus");
 });
 
 test("extractResaleLeadProfile captures budget bhk area and timeline", () => {

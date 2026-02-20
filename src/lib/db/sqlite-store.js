@@ -11,6 +11,21 @@ let state = {
   db: null
 };
 
+function closeStorage() {
+  try {
+    if (state.db && typeof state.db.close === "function") {
+      state.db.close();
+    }
+  } catch {}
+  state = {
+    initialized: false,
+    enabled: false,
+    reason: "not_initialized",
+    dbPath: sqlitePath(),
+    db: null
+  };
+}
+
 function loadNodeSqlite() {
   try {
     // Node 22+ built-in module.
@@ -23,7 +38,12 @@ function loadNodeSqlite() {
 }
 
 function ensureInitialized() {
-  if (state.initialized) return state;
+  if (state.initialized) {
+    const currentPath = sqlitePath();
+    if (state.dbPath === currentPath) return state;
+    // WABA_HOME can change in tests/runtime; reopen DB on the new path.
+    closeStorage();
+  }
   state.initialized = true;
 
   if (String(process.env.WABA_STORAGE_DB || "").toLowerCase() === "off") {
@@ -123,5 +143,6 @@ module.exports = {
   insertMemoryEvent,
   readMemoryEvents,
   listMemoryClients,
-  deleteMemoryClient
+  deleteMemoryClient,
+  closeStorage
 };

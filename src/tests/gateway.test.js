@@ -158,3 +158,85 @@ test("gateway saves and returns client credentials via API", async () => {
     await fs.remove(tempRoot);
   }
 });
+
+test("gateway saves ai config from settings API", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "waba-gw-test-"));
+  const prevHome = process.env.WABA_HOME;
+  process.env.WABA_HOME = tempRoot;
+
+  const { server } = await startGatewayServer({ host: "127.0.0.1", port: 0, client: "default", language: "en" });
+  try {
+    const boundPort = server.address().port;
+    const base = `http://127.0.0.1:${boundPort}`;
+    const saveRes = await fetch(`${base}/api/config/ai`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: "ollama",
+        model: "deepseek-coder-v2:16b",
+        baseUrl: "http://127.0.0.1:11434/v1"
+      })
+    });
+    assert.equal(saveRes.status, 200);
+    const saved = await saveRes.json();
+    assert.equal(saved.ok, true);
+    assert.equal(saved.aiProvider, "ollama");
+    assert.equal(saved.aiModel, "deepseek-coder-v2:16b");
+    assert.equal(saved.aiBaseUrl, "http://127.0.0.1:11434/v1");
+
+    const cfgRes = await fetch(`${base}/api/config`);
+    assert.equal(cfgRes.status, 200);
+    const cfg = await cfgRes.json();
+    assert.equal(cfg.ok, true);
+    assert.equal(cfg.aiProvider, "ollama");
+    assert.equal(cfg.aiModel, "deepseek-coder-v2:16b");
+    assert.equal(cfg.aiBaseUrl, "http://127.0.0.1:11434/v1");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    closeStorage();
+    process.env.WABA_HOME = prevHome;
+    await fs.remove(tempRoot);
+  }
+});
+
+test("gateway saves openrouter config from settings API", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "waba-gw-test-"));
+  const prevHome = process.env.WABA_HOME;
+  process.env.WABA_HOME = tempRoot;
+
+  const { server } = await startGatewayServer({ host: "127.0.0.1", port: 0, client: "default", language: "en" });
+  try {
+    const boundPort = server.address().port;
+    const base = `http://127.0.0.1:${boundPort}`;
+    const saveRes = await fetch(`${base}/api/config/ai`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: "openrouter",
+        model: "openai/gpt-4o-mini",
+        baseUrl: "https://openrouter.ai/api/v1",
+        apiKey: "or-test-key"
+      })
+    });
+    assert.equal(saveRes.status, 200);
+    const saved = await saveRes.json();
+    assert.equal(saved.ok, true);
+    assert.equal(saved.aiProvider, "openrouter");
+    assert.equal(saved.aiModel, "openai/gpt-4o-mini");
+    assert.equal(saved.aiBaseUrl, "https://openrouter.ai/api/v1");
+
+    const cfgRes = await fetch(`${base}/api/config`);
+    assert.equal(cfgRes.status, 200);
+    const cfg = await cfgRes.json();
+    assert.equal(cfg.ok, true);
+    assert.equal(cfg.aiProvider, "openrouter");
+    assert.equal(cfg.aiModel, "openai/gpt-4o-mini");
+    assert.equal(cfg.aiBaseUrl, "https://openrouter.ai/api/v1");
+    assert.equal(cfg.aiHasKey, true);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    closeStorage();
+    process.env.WABA_HOME = prevHome;
+    await fs.remove(tempRoot);
+  }
+});

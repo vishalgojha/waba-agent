@@ -336,6 +336,18 @@ class WhatsAppAgent {
 
     const modelAvailable = hasAiProviderConfigured(this.config || {});
     if (!modelAvailable) {
+      const direct = this.heuristicParse(userInput, null);
+      if (direct) {
+        const prefix = this.context.language === "hi"
+          ? "AI provider unavailable hai. Direct command mode active."
+          : "AI provider unavailable. Direct command mode is active.";
+        const msg = `${prefix} ${direct.message}`.trim();
+        this.context.addMessage("agent", msg);
+        return {
+          ...direct,
+          message: msg
+        };
+      }
       const proactive = await this.scheduler.suggestFollowups();
       const base = this.resaleMagicMode
         ? (this.context.language === "hi"
@@ -508,7 +520,46 @@ class WhatsAppAgent {
   }
 
   heuristicParse(userInput, fallbackMessage) {
-    const text = String(userInput || "").toLowerCase();
+    const raw = String(userInput || "").trim();
+    const text = raw.toLowerCase();
+    if (/^\s*whoami\s*$/i.test(raw) || /\bwho am i\b/.test(text)) {
+      return {
+        message: `Client: ${this.context.client || "default"} | Language: ${this.context.language || "en"} | Leads: ${this.context.getActiveLeadsCount()}`,
+        actions: [],
+        suggestions: ["Show templates", "Show memory"],
+        needsInput: false
+      };
+    }
+    if (/\b(send|share|push)\b.*\bwelcome\b|\bwelcome text\b|\bwelcome message\b/.test(text)) {
+      let to = normalizePhone(raw);
+      if (!to) {
+        const knownLead = Array.isArray(this.context.leads)
+          ? this.context.leads.find((l) => normalizePhone(l?.phone))
+          : null;
+        if (knownLead) to = normalizePhone(knownLead.phone);
+      }
+      if (!to) {
+        return {
+          message: "Please include recipient number, or first load/announce leads. Example: Send welcome text to +919812345678.",
+          actions: [],
+          suggestions: ["whoami", "show templates", "show memory", "send welcome text to +919812345678"],
+          needsInput: true
+        };
+      }
+      return {
+        message: `I can send a welcome text to ${to}. Approve Execute to proceed.`,
+        actions: [{
+          tool: "message.send_text",
+          params: {
+            to,
+            body: `Hi! Welcome to ${this.context.client || "our service"}. How can we help you today?`
+          },
+          description: `Send welcome text to ${to}`
+        }],
+        suggestions: ["Execute all", "Edit message body"],
+        needsInput: false
+      };
+    }
     if (/\bshow\b.*\btemplates?\b/.test(text)) {
       return {
         message: "I can fetch templates now.",
@@ -525,10 +576,13 @@ class WhatsAppAgent {
         needsInput: false
       };
     }
-    return fallbackResponse(fallbackMessage || "Please tell me the exact action to run.", [
-      "Send welcome text",
-      "Schedule follow-up tomorrow 10am"
-    ]);
+    if (fallbackMessage === null) {
+      return null;
+    }
+    return fallbackResponse(
+      fallbackMessage || "Please tell me the exact action to run.",
+      ["whoami", "show templates", "show memory", "send welcome text to +919812345678"]
+    );
   }
 }
 

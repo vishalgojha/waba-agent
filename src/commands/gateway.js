@@ -1,7 +1,12 @@
 const { startGatewayServer } = require("../server/gateway");
+const { getConfig } = require("../lib/config");
+const { logger } = require("../lib/logger");
+const { ensureOllamaRunning } = require("../lib/ai/ollama-autostart");
 
 async function startGateway(opts = {}, rootProgram) {
   if (rootProgram?.opts()?.json) throw new Error("--json not supported for long-running gateway.");
+  const cfg = await getConfig();
+  await ensureOllamaRunning({ cfg, logger });
   await startGatewayServer({
     host: opts.host,
     port: opts.port,

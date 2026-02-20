@@ -3,7 +3,7 @@ const fs = require("fs-extra");
 const path = require("path");
 
 const { logger } = require("../lib/logger");
-const { getConfig } = require("../lib/config");
+const { getConfig, setConfig } = require("../lib/config");
 const { addOrUpdateClient } = require("../lib/clients");
 const { computeMetrics } = require("../lib/analytics");
 const { getMissedLeads } = require("../lib/followup");
@@ -41,6 +41,23 @@ function normalizeClientCreds(cfg, clientName) {
 
 function isDigits(value) {
   return /^\d+$/.test(String(value || "").trim());
+}
+
+function aiFieldsForProvider(provider) {
+  const p = String(provider || "").trim().toLowerCase();
+  if (p === "openai" || p === "ollama") {
+    return { keyField: "openaiApiKey", modelField: "openaiModel", baseUrlField: "openaiBaseUrl" };
+  }
+  if (p === "anthropic") {
+    return { keyField: "anthropicApiKey", modelField: "anthropicModel", baseUrlField: "anthropicBaseUrl" };
+  }
+  if (p === "xai") {
+    return { keyField: "xaiApiKey", modelField: "xaiModel", baseUrlField: "xaiBaseUrl" };
+  }
+  if (p === "openrouter") {
+    return { keyField: "openrouterApiKey", modelField: "openrouterModel", baseUrlField: "openrouterBaseUrl" };
+  }
+  return { keyField: null, modelField: null, baseUrlField: null };
 }
 
 function gatewayHtml(defaultClient, defaultLanguage) {
@@ -606,6 +623,11 @@ async function startGatewayServer({ host = "127.0.0.1", port = 3010, client = "d
   app.get("/api/config", async (_req, res) => {
     const current = await getConfig();
     const creds = normalizeClientCreds(current, current.activeClient || "default");
+    const provider = String(current.aiProvider || "ollama").trim().toLowerCase();
+    const fields = aiFieldsForProvider(provider);
+    const aiModel = fields.modelField ? current[fields.modelField] : null;
+    const aiBaseUrl = fields.baseUrlField ? current[fields.baseUrlField] : null;
+    const aiHasKey = fields.keyField ? !!current[fields.keyField] : false;
     res.json({
       ok: true,
       activeClient: current.activeClient || "default",
@@ -613,9 +635,58 @@ async function startGatewayServer({ host = "127.0.0.1", port = 3010, client = "d
       hasToken: creds.hasToken,
       hasOpenAi: !!current.openaiApiKey,
       hasAi: hasAiProviderConfigured(current),
-      aiProvider: current.aiProvider || null,
+      aiProvider: provider || null,
+      aiModel: aiModel || null,
+      aiBaseUrl: aiBaseUrl || null,
+      aiHasKey,
       webhookUrl: current.lastPublicWebhookUrl || current.webhookUrl || null
     });
+  });
+
+  app.post("/api/config/ai", async (req, res) => {
+    try {
+      const allowed = new Set(["ollama", "openai", "anthropic", "xai", "openrouter"]);
+      const provider = String(req.body?.provider || "ollama").trim().toLowerCase();
+      const model = String(req.body?.model || "").trim();
+      const baseUrl = String(req.body?.baseUrl || "").trim();
+      const apiKey = String(req.body?.apiKey || "").trim();
+
+      if (!allowed.has(provider)) {
+        res.status(400).json({ ok: false, error: "provider_invalid" });
+        return;
+      }
+      if (!model) {
+        res.status(400).json({ ok: false, error: "model_required" });
+        return;
+      }
+
+      const fields = aiFieldsForProvider(provider);
+      const patch = { aiProvider: provider };
+      if (fields.modelField) patch[fields.modelField] = model;
+      if (fields.baseUrlField) {
+        if (baseUrl) patch[fields.baseUrlField] = baseUrl;
+        else if (provider === "ollama") patch[fields.baseUrlField] = "http://127.0.0.1:11434/v1";
+      }
+      if (fields.keyField) {
+        if (apiKey) patch[fields.keyField] = apiKey;
+        else if (provider === "ollama") patch[fields.keyField] = "ollama";
+      }
+
+      await setConfig(patch);
+      const latest = await getConfig();
+      const outFields = aiFieldsForProvider(provider);
+      const aiModel = outFields.modelField ? latest[outFields.modelField] : null;
+      const aiBaseUrl = outFields.baseUrlField ? latest[outFields.baseUrlField] : null;
+      res.json({
+        ok: true,
+        aiProvider: latest.aiProvider || null,
+        aiModel: aiModel || null,
+        aiBaseUrl: aiBaseUrl || null,
+        hasAi: hasAiProviderConfigured(latest)
+      });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
   });
 
   app.get("/api/clients/:client/credentials", async (req, res) => {

@@ -1,498 +1,379 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>WABA Gateway - Custom UI</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
-    <style>
-      :root {
-        --bg0: #f7f2e6;
-        --bg1: #e7f0ef;
-        --bg2: #d7e7ff;
-        --card: rgba(255,255,255,0.78);
-        --ink: #17202a;
-        --muted: #556270;
-        --brand: #0f766e;
-        --brand2: #1d4ed8;
-        --danger: #b91c1c;
-        --ok: #166534;
-        --ring: rgba(15, 118, 110, 0.25);
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        font-family: "Sora", "Avenir Next", "Segoe UI Variable", sans-serif;
-        color: var(--ink);
-        background:
-          radial-gradient(circle at 12% 16%, rgba(15,118,110,0.18), transparent 38%),
-          radial-gradient(circle at 88% 14%, rgba(29,78,216,0.22), transparent 36%),
-          linear-gradient(130deg, var(--bg0), var(--bg1) 48%, var(--bg2));
-        overflow: hidden;
-      }
-      .noise {
-        position: fixed; inset: 0; pointer-events: none; opacity: 0.08;
-        background-image: radial-gradient(#000 0.55px, transparent 0.55px);
-        background-size: 3px 3px;
-      }
-      .layout {
-        display: grid;
-        grid-template-columns: 320px 1fr;
-        gap: 18px;
-        height: 100vh;
-        padding: 18px;
-      }
-      .panel {
-        background: var(--card);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255,255,255,0.7);
-        box-shadow: 0 18px 40px rgba(19, 34, 56, 0.16);
-        border-radius: 20px;
-      }
-      .side {
-        display: grid;
-        grid-template-rows: auto auto 1fr auto;
-        gap: 12px;
-        padding: 16px;
-        animation: rise .45s ease both;
-      }
-      .brand h1 {
-        margin: 0;
-        font-size: 24px;
-        line-height: 1.05;
-        letter-spacing: 0.4px;
-      }
-      .brand p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
-      .controls label { display: block; font-size: 11px; color: var(--muted); margin: 8px 0 5px; text-transform: uppercase; letter-spacing: 0.08em; }
-      .controls input, .controls select, .composer textarea {
-        width: 100%;
-        border-radius: 12px;
-        border: 1px solid rgba(23, 32, 42, 0.15);
-        padding: 10px 11px;
-        font: inherit;
-        background: rgba(255,255,255,0.85);
-        color: var(--ink);
-      }
-      .controls input:focus, .controls select:focus, .composer textarea:focus {
-        outline: none;
-        border-color: var(--brand);
-        box-shadow: 0 0 0 4px var(--ring);
-      }
-      .btnRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-      button {
-        border: 0;
-        border-radius: 12px;
-        padding: 10px 12px;
-        font: 600 13px "Sora", sans-serif;
-        cursor: pointer;
-        transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
-      }
-      button[disabled] { cursor: not-allowed; opacity: 0.6; }
-      button:hover { transform: translateY(-1px); }
-      button:active { transform: translateY(1px); }
-      .btnPrimary {
-        background: linear-gradient(135deg, var(--brand), var(--brand2));
-        color: #fff;
-        box-shadow: 0 10px 22px rgba(29, 78, 216, 0.24);
-      }
-      .btnGhost { background: rgba(255,255,255,0.9); color: var(--ink); border: 1px solid rgba(23, 32, 42, 0.12); }
-      .stats { display: grid; gap: 8px; }
-      .stat {
-        border-radius: 12px;
-        padding: 10px 11px;
-        background: linear-gradient(120deg, rgba(255,255,255,0.85), rgba(255,255,255,0.6));
-        border: 1px solid rgba(23, 32, 42, 0.08);
-        animation: rise .45s ease both;
-      }
-      .stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
-      .stat .v { margin-top: 5px; font-weight: 700; font-size: 17px; }
-      .sessions {
-        min-height: 120px;
-        overflow: auto;
-        border: 1px solid rgba(23,32,42,0.08);
-        border-radius: 12px;
-        background: rgba(255,255,255,0.55);
-      }
-      .sessionItem {
-        padding: 10px 11px;
-        border-bottom: 1px dashed rgba(23,32,42,0.08);
-        cursor: pointer;
-      }
-      .sessionItem:hover { background: rgba(15, 118, 110, 0.08); }
-      .sessionItem:last-child { border-bottom: 0; }
-      .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; color: var(--muted); }
-      .main {
-        display: grid;
-        grid-template-rows: auto auto 1fr;
-        gap: 12px;
-        padding: 14px;
-        animation: rise .55s ease both;
-        min-height: 0;
-        overflow: hidden;
-      }
-      .topbar {
-        display: grid;
-        grid-template-columns: 1fr auto auto;
-        gap: 10px;
-        align-items: center;
-      }
-      .title {
-        font-size: 22px;
-        font-weight: 700;
-      }
-      .pill {
-        padding: 6px 10px;
-        border-radius: 999px;
-        font-size: 12px;
-        background: rgba(15,118,110,0.12);
-        color: #0f766e;
-      }
-      .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
-      .tab { border: 1px solid rgba(23,32,42,0.12); background: rgba(255,255,255,0.9); }
-      .tab.active { background: linear-gradient(135deg, var(--brand), var(--brand2)); color: #fff; border-color: transparent; }
-      .view { display: none; min-height: 0; }
-      .view.active { display: grid; gap: 12px; min-height: 0; overflow: auto; }
-      .viewChat { grid-template-rows: minmax(180px, 42vh) auto auto; align-content: start; }
-      .chat {
-        overflow: auto;
-        padding: 8px;
-        border-radius: 16px;
-        border: 1px solid rgba(23, 32, 42, 0.09);
-        background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(255,255,255,0.55));
-        min-height: 220px;
-      }
-      .msgWrap {
-        display: flex;
-        margin: 9px 0;
-        animation: rise .25s ease both;
-      }
-      .msgWrap.user { justify-content: flex-end; }
-      .msg {
-        max-width: min(76ch, 88%);
-        border-radius: 15px;
-        padding: 10px 12px;
-        line-height: 1.42;
-        font-size: 14px;
-      }
-      .msg.agent {
-        background: rgba(255,255,255,0.93);
-        border: 1px solid rgba(23,32,42,0.08);
-      }
-      .msg.user {
-        background: linear-gradient(140deg, #0f766e, #1d4ed8);
-        color: #fff;
-      }
-      .quick {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-      .chip {
-        border: 1px solid rgba(23,32,42,0.15);
-        background: rgba(255,255,255,0.9);
-        border-radius: 999px;
-        padding: 7px 11px;
-        font-size: 12px;
-        cursor: pointer;
-      }
-      .chip:hover { background: rgba(15, 118, 110, 0.1); border-color: rgba(15,118,110,0.32); }
-      .actions {
-        border: 1px solid rgba(23,32,42,0.08);
-        border-radius: 14px;
-        padding: 10px;
-        background: rgba(255,255,255,0.68);
-      }
-      .actions h3 { margin: 0 0 10px; font-size: 14px; }
-      .actionRow {
-        display: grid;
-        grid-template-columns: 1fr auto auto;
-        gap: 8px;
-        align-items: center;
-        padding: 8px;
-        border-radius: 10px;
-        border: 1px solid rgba(23,32,42,0.06);
-        margin-bottom: 7px;
-        background: rgba(255,255,255,0.9);
-      }
-      .actionRow .desc { font-size: 13px; }
-      .risk { font-size: 11px; padding: 4px 8px; border-radius: 999px; }
-      .risk.high { background: rgba(185,28,28,0.14); color: var(--danger); }
-      .risk.low { background: rgba(22,101,52,0.15); color: var(--ok); }
-      .risk.medium { background: rgba(180,83,9,0.15); color: #b45309; }
-      .actionButtons { display: flex; gap: 6px; }
-      .actionButtons button { padding: 6px 8px; font-size: 12px; }
-      .empty {
-        border: 1px dashed rgba(23, 32, 42, 0.16);
-        border-radius: 10px;
-        padding: 12px;
-        color: var(--muted);
-        background: rgba(255,255,255,0.72);
-      }
-      .composer {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 10px;
-      }
-      .composerSection {
-        border: 1px solid rgba(23,32,42,0.10);
-        border-radius: 14px;
-        padding: 10px;
-        background: rgba(255,255,255,0.78);
-      }
-      .composerHeader {
-        margin: 0 0 8px;
-        font-size: 14px;
-        font-weight: 700;
-      }
-      .composer textarea {
-        resize: none;
-        min-height: 56px;
-        max-height: 200px;
-      }
-      .hint { color: var(--muted); font-size: 12px; }
-      .kpiGrid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; }
-      .kpiCard { border-radius: 12px; padding: 12px; background: rgba(255,255,255,0.8); border: 1px solid rgba(23,32,42,0.08); }
-      .kpiCard .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
-      .kpiCard .v { margin-top: 6px; font-size: 22px; font-weight: 700; }
-      .dashboardGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-      .campaignForm { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-      .campaignFull { grid-column: 1 / -1; }
-      .stagger > * { opacity: 0; transform: translateY(8px); animation: rise .38s ease forwards; }
-      .stagger > *:nth-child(2) { animation-delay: .04s; }
-      .stagger > *:nth-child(3) { animation-delay: .08s; }
-      .stagger > *:nth-child(4) { animation-delay: .12s; }
-      .stagger > *:nth-child(5) { animation-delay: .16s; }
-      .toasts {
-        position: fixed;
-        right: 14px;
-        bottom: 14px;
-        z-index: 20;
-        width: min(330px, calc(100vw - 24px));
-        display: grid;
-        gap: 8px;
-      }
-      .toast {
-        border-radius: 11px;
-        border: 1px solid rgba(23,32,42,0.12);
-        padding: 10px 11px;
-        background: rgba(255,255,255,0.95);
-        box-shadow: 0 8px 22px rgba(19, 34, 56, 0.18);
-        font-size: 13px;
-      }
-      .toast.ok { border-color: rgba(22,101,52,0.22); }
-      .toast.warn { border-color: rgba(180,83,9,0.24); }
-      .toast.err { border-color: rgba(185,28,28,0.24); }
-      .skeleton {
-        position: relative;
-        overflow: hidden;
-        color: transparent !important;
-      }
-      .skeleton::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.65), rgba(255,255,255,0));
-        animation: shimmer 1.4s linear infinite;
-      }
-      @keyframes shimmer {
-        from { transform: translateX(-100%); }
-        to { transform: translateX(100%); }
-      }
-      @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.99);} to { opacity: 1; transform: translateY(0) scale(1);} }
-      @media (max-width: 980px) {
-        body { overflow: auto; }
-        .layout { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
-        .main { min-height: 72vh; }
-        .viewChat { grid-template-rows: minmax(180px, 48vh) auto auto; }
-        .dashboardGrid, .kpiGrid { grid-template-columns: 1fr; }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after {
-          animation-duration: 0.01ms !important;
-          animation-iteration-count: 1 !important;
-          transition-duration: 0.01ms !important;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="noise"></div>
-    <div class="layout">
-      <aside class="panel side stagger">
-        <div class="brand">
-          <h1>WABA<br/>Gateway</h1>
-          <p>Local UI + conversational API bridge</p>
-        </div>
-        <div class="controls">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WABA Gateway Mission Control</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #111827;
+      --panel-soft: #0f172a;
+      --muted: #94a3b8;
+      --text: #e2e8f0;
+      --line: #1f2937;
+      --brand: #3b82f6;
+      --brand-2: #2563eb;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --err: #ef4444;
+    }
+    html.dark {
+      --bg: #060913;
+      --panel: #0f1629;
+      --panel-soft: #0b1220;
+      --line: #1b2438;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(circle at 10% 0%, #111a32, var(--bg) 40%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+    .side {
+      border-right: 1px solid var(--line);
+      background: rgba(6, 10, 20, 0.75);
+      backdrop-filter: blur(8px);
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto auto auto 1fr;
+      gap: 14px;
+      min-height: 0;
+    }
+    .brand h1 { margin: 0; font-size: 20px; }
+    .sub { color: var(--muted); font-size: 12px; }
+    .controls { display: grid; gap: 10px; }
+    .controls label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .controls input, .controls select, textarea, #configSnapshot {
+      width: 100%; border: 1px solid var(--line); border-radius: 10px;
+      background: var(--panel-soft); color: var(--text); padding: 10px;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    button {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: var(--panel-soft);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .btnPrimary { background: linear-gradient(135deg, var(--brand), var(--brand-2)); }
+    .btnGhost { border-color: var(--line); }
+    .main {
+      display: grid;
+      grid-template-rows: auto auto auto minmax(0, 1fr);
+      min-height: 0;
+    }
+    .top {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(6,10,20,.45);
+    }
+    .top .title { font-size: 18px; font-weight: 700; }
+    .topActions { display: flex; gap: 8px; align-items: center; }
+    .theme-toggle { width: 38px; height: 38px; }
+    .statusBar {
+      margin: 14px 18px 0;
+      padding: 12px 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .statusItem { min-width: 0; }
+    .statusItem .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+    .statusItem .v { margin-top: 6px; font-weight: 700; }
+    .tabs { display: flex; gap: 8px; padding: 14px 18px 10px; }
+    .tab { border: 1px solid var(--line); background: var(--panel); }
+    .tab.active { background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent; }
+    .view { display: none; min-height: 0; }
+    .view.active { display: grid; min-height: 0; }
+    #viewDashboard { padding: 0 18px 18px; gap: 12px; grid-template-columns: 1.1fr .9fr; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      min-height: 0;
+    }
+    .card h3 { margin: 0 0 10px; font-size: 14px; }
+    #sessionListDashboard, #sessionList, #campaignList, #actionList { overflow: auto; min-height: 0; }
+    .sessionItem {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: var(--panel-soft);
+      cursor: pointer;
+    }
+    #viewChat { padding: 0 18px 18px; grid-template-rows: minmax(0,1fr) auto; gap: 12px; overflow: hidden; }
+    .chatGrid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; min-height: 0; overflow: hidden; }
+    #chatLog {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      overflow: auto;
+      min-height: 260px;
+    }
+    .msgWrap { display:flex; margin:8px 0; }
+    .msgWrap.user { justify-content:flex-end; }
+    .msg { max-width: 88%; padding:10px 12px; border-radius: 12px; line-height:1.4; }
+    .msg.agent { background: var(--panel-soft); border: 1px solid var(--line); }
+    .msg.user { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; }
+    #actionsBox { min-height: 0; overflow: auto; }
+    .actionRow {
+      display:grid; grid-template-columns: 1fr auto auto; gap:8px; align-items:center;
+      border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-bottom: 8px;
+      background: var(--panel-soft);
+    }
+    .risk { padding: 2px 8px; border-radius: 999px; font-size: 11px; }
+    .risk.high { background: rgba(239,68,68,.15); color: #fca5a5; }
+    .risk.medium { background: rgba(245,158,11,.15); color: #fcd34d; }
+    .risk.low { background: rgba(34,197,94,.15); color: #86efac; }
+    .composer {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+    #quickChips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      border: 1px solid var(--line);
+      background: var(--panel-soft);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .composerRow { display:grid; grid-template-columns: 1fr auto; gap:8px; }
+    #msgInput { min-height: 60px; max-height: 180px; resize: vertical; }
+    #viewCampaigns, #viewSettings { padding: 0 18px 18px; }
+    .stack { display: grid; gap: 12px; }
+    .empty { color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 10px; }
+    #toasts { position: fixed; right: 14px; bottom: 14px; display:grid; gap:8px; z-index: 20; }
+    .toast { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+    .toast.ok { border-color: rgba(34,197,94,.35); }
+    .toast.warn { border-color: rgba(245,158,11,.35); }
+    .toast.err { border-color: rgba(239,68,68,.35); }
+    .skeleton { color: transparent !important; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; color: var(--muted); }
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; }
+      .side { border-right: 0; border-bottom: 1px solid var(--line); }
+      .statusBar { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .chatGrid { grid-template-columns: 1fr; }
+      #viewDashboard { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="side">
+      <div class="brand">
+        <h1>WABA Gateway</h1>
+        <div class="sub">Mission control</div>
+      </div>
+      <div class="controls">
+        <div>
           <label>Client</label>
           <input id="clientInput" value="acme-realty" />
+        </div>
+        <div>
           <label>Language</label>
           <select id="langInput">
             <option value="en" selected>English</option>
             <option value="hi">Hindi/English</option>
           </select>
-          <div class="btnRow">
-            <button class="btnPrimary" id="startBtn">Start Session</button>
-            <button class="btnGhost" id="refreshBtn">Refresh</button>
-          </div>
-          <div class="btnRow">
-            <button class="btnPrimary" id="magicToggleBtn">Magic Mode: OFF</button>
-            <button class="btnGhost" id="importResaleBtn">Import Resale Leads</button>
-          </div>
         </div>
-        <div class="stats">
-          <div class="stat"><div class="k">Pending Follow-ups</div><div class="v" id="sMissed">-</div></div>
-          <div class="stat"><div class="k">Inbound Leads</div><div class="v" id="sLeads">-</div></div>
-          <div class="stat"><div class="k">Avg Response</div><div class="v" id="sResp">-</div></div>
-          <div class="stat"><div class="k">Re-engaged (48h)</div><div class="v" id="sReengaged">-</div></div>
-          <div class="stat"><div class="k">Qualified (48h)</div><div class="v" id="sQualified">-</div></div>
-          <div class="stat"><div class="k">Win Card</div><div class="v"><button class="btnGhost" id="shareWinBtn">Share this win</button></div></div>
+        <div class="row">
+          <button class="btnPrimary" id="startBtn">Start Session</button>
+          <button class="btnGhost" id="refreshBtn">Refresh</button>
         </div>
-        <div>
-          <div class="mono" style="margin-bottom:6px;">Recent Sessions</div>
-          <div class="sessions" id="sessionList"></div>
-        </div>
-      </aside>
+      </div>
+      <div class="controls">
+        <label><input id="allowHighRisk" type="checkbox" /> Allow high-risk execute</label>
+        <button class="btnGhost" id="magicToggleBtn">Magic Mode: OFF</button>
+        <button class="btnGhost" id="importResaleBtn">Import Resale Leads</button>
+      </div>
+      <div class="card" style="padding:10px;">
+        <h3>Recent Sessions</h3>
+        <div id="sessionList"></div>
+      </div>
+    </aside>
 
-      <main class="panel main">
-        <div class="topbar">
-          <div class="title">WABA Control Room</div>
-          <div class="pill" id="sessionBadge">No session</div>
-          <label class="pill" style="cursor:pointer;">
-            <input id="allowHighRisk" type="checkbox" style="vertical-align:middle; margin-right:6px;" />
-            Allow high-risk execute
-          </label>
+    <main class="main">
+      <div class="top">
+        <div class="title">Control Room</div>
+        <div class="topActions">
+          <button class="chip" id="quickMetaLaunchTopBtn" type="button">Get Tokens</button>
+          <button class="theme-toggle btnGhost" type="button">?</button>
+          <div id="sessionBadge" class="mono">No session</div>
         </div>
-        <div class="tabs">
-          <button class="tab active" data-view="dashboard">Dashboard</button>
-          <button class="tab" data-view="chat">Chat</button>
-          <button class="tab" data-view="campaigns">Campaigns</button>
-          <button class="tab" data-view="settings">Settings</button>
+      </div>
+
+      <section class="statusBar">
+        <div class="statusItem"><div class="k">Missed</div><div class="v" id="dMissed">-</div></div>
+        <div class="statusItem"><div class="k">Inbound</div><div class="v" id="dLeads">-</div></div>
+        <div class="statusItem"><div class="k">Avg Resp</div><div class="v" id="dResp">-</div></div>
+        <div class="statusItem"><div class="k">Re-engaged</div><div class="v" id="dReengaged">-</div></div>
+        <div class="statusItem"><div class="k">Gateway</div><div class="v" id="gatewayHealth">Unknown</div></div>
+        <div class="statusItem"><div class="k">Webhook</div><div class="v" id="webhookUrl">Not set</div></div>
+      </section>
+
+      <div class="tabs">
+        <button class="tab active" data-view="dashboard">Dashboard</button>
+        <button class="tab" data-view="chat">Chat</button>
+        <button class="tab" data-view="campaigns">Campaigns</button>
+        <button class="tab" data-view="settings">Settings</button>
+      </div>
+
+      <section class="view active" id="viewDashboard">
+        <div class="card stack">
+          <h3>Quick Actions</h3>
+          <div class="row">
+            <button class="btnPrimary" id="openChatBtn">Open Chat</button>
+            <button class="btnGhost" id="openCampaignsBtn">Open Campaigns</button>
+          </div>
+          <div class="row">
+            <button class="btnGhost" id="openSettingsBtn">Open Settings</button>
+            <button class="btnGhost" id="refreshDashBtn">Refresh Health</button>
+          </div>
+          <div class="row">
+            <button class="btnGhost" id="quickMetaLaunchBtn">Get Meta Tokens</button>
+            <button class="btnGhost" id="quickMetaCmdBtn">Copy Meta CLI</button>
+          </div>
+          <button class="btnGhost" id="shareWinBtn">Share this win</button>
         </div>
+        <div class="card stack">
+          <h3>Live Activity</h3>
+          <div id="sessionListDashboard"></div>
+          <h3>Config Snapshot</h3>
+          <textarea id="configSnapshot" rows="8"></textarea>
+          <button class="btnGhost" id="reloadSettingsBtn">Reload Settings</button>
+        </div>
+      </section>
 
-        <section class="view active" id="viewDashboard">
-          <div class="kpiGrid">
-            <div class="kpiCard"><div class="k">Missed Leads</div><div class="v" id="dMissed">-</div></div>
-            <div class="kpiCard"><div class="k">Inbound</div><div class="v" id="dLeads">-</div></div>
-            <div class="kpiCard"><div class="k">Avg Response</div><div class="v" id="dResp">-</div></div>
-            <div class="kpiCard"><div class="k">Re-engaged</div><div class="v" id="dReengaged">-</div></div>
-          </div>
-          <div class="dashboardGrid">
-            <div class="actions">
-              <h3>Quick Actions</h3>
-              <div class="btnRow">
-                <button class="btnPrimary" id="openChatBtn">Open Chat</button>
-                <button class="btnGhost" id="openCampaignsBtn">Open Campaigns</button>
-              </div>
-              <div class="btnRow">
-                <button class="btnGhost" id="refreshDashBtn">Refresh Health</button>
-                <button class="btnGhost" id="openSettingsBtn">Open Settings</button>
-              </div>
-            </div>
-            <div class="actions">
-              <h3>Recent Sessions</h3>
-              <div class="sessions" id="sessionListDashboard"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="view viewChat" id="viewChat">
-          <section class="chat" id="chatLog"></section>
-
-          <section class="actions" id="actionsBox">
-            <h3 style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <section class="view" id="viewChat">
+        <div class="chatGrid">
+          <section id="chatLog"></section>
+          <section class="card" id="actionsBox">
+            <h3 style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
               <span>Proposed Actions</span>
               <span class="mono" id="queueCount">0 pending</span>
             </h3>
             <div id="actionList"></div>
-            <div style="display:flex; gap:8px;">
+            <div class="row">
               <button class="btnPrimary" id="execAllBtn" disabled>Execute All</button>
               <button class="btnGhost" id="clearActionsBtn">Clear</button>
             </div>
-            <div class="hint">Approve/reject individually, or execute entire queue.</div>
           </section>
-
-          <section class="composerSection">
-            <h3 class="composerHeader">Agent Chat (Tool Calling)</h3>
-            <div class="quick" id="quickChips"></div>
-            <div style="height:8px;"></div>
-            <div class="composer">
-              <textarea id="msgInput" placeholder="Type naturally. Example: I got 5 new leads from 99acres for ACME"></textarea>
-              <button class="btnPrimary" id="sendBtn">Send</button>
-            </div>
-            <div class="hint">Enter to send. Shift+Enter for newline.</div>
-          </section>
-        </section>
-
-        <section class="view" id="viewCampaigns">
-          <div class="dashboardGrid">
-            <div class="actions">
-              <h3>Create Campaign</h3>
-              <div class="campaignForm">
-                <input id="campaignName" placeholder="Campaign name" />
-                <input id="campaignTemplate" placeholder="Template name" />
-                <input id="campaignRecipients" class="campaignFull" placeholder="Recipients comma separated (+91...)" />
-                <input id="campaignSchedule" type="datetime-local" />
-                <button class="btnPrimary" id="createCampaignBtn">Create</button>
-              </div>
-            </div>
-            <div class="actions">
-              <h3>Campaigns</h3>
-              <div id="campaignList" class="sessions"></div>
-            </div>
+        </div>
+        <section class="composer">
+          <div id="quickChips"></div>
+          <div class="row">
+            <button class="chip" id="openMetaAppBtn" type="button">Meta App</button>
+            <button class="chip" id="openMetaApiBtn" type="button">API Setup</button>
+          </div>
+          <div class="composerRow">
+            <textarea id="msgInput" placeholder="Try: whoami | show templates | send welcome text to +919812345678"></textarea>
+            <button class="btnPrimary" id="sendBtn">Send</button>
           </div>
         </section>
+      </section>
 
-        <section class="view" id="viewSettings">
-          <div class="dashboardGrid">
-            <div class="actions">
-              <h3>Meta Credentials</h3>
-              <label class="mono">Token</label>
-              <input id="metaToken" type="password" placeholder="Paste permanent token" />
-              <div class="hint" id="metaTokenHint" style="margin-top:6px;">Not set</div>
-              <label class="mono" style="display:block;margin-top:8px;">Phone Number ID</label>
-              <input id="metaPhoneId" placeholder="Digits only" />
-              <label class="mono" style="display:block;margin-top:8px;">WABA ID</label>
-              <input id="metaWabaId" placeholder="Digits only" />
-              <div class="btnRow">
-                <button class="btnPrimary" id="saveMetaBtn">Save Meta</button>
-                <button class="btnGhost" id="reloadMetaBtn">Reload</button>
-              </div>
-            </div>
-            <div class="actions">
-              <h3>AI Settings</h3>
-              <label class="mono">Provider</label>
-              <select id="aiProvider">
-                <option value="ollama" selected>Ollama (Local)</option>
-                <option value="openai">OpenAI</option>
-                <option value="compatible">OpenAI-compatible</option>
-              </select>
-              <label class="mono" style="display:block;margin-top:8px;">Model</label>
-              <input id="aiModel" value="qwen2.5:7b" />
-              <div class="btnRow">
-                <button class="btnPrimary" id="saveAiBtn">Save Local</button>
-                <button class="btnGhost" id="reloadSettingsBtn">Reload</button>
-              </div>
-            </div>
-            <div class="actions campaignFull">
-              <h3>Runtime</h3>
-              <div class="mono">Webhook URL</div>
-              <div id="webhookUrl" style="margin:6px 0 10px;">-</div>
-              <div class="mono">Gateway Health</div>
-              <div id="gatewayHealth" style="margin:6px 0 10px;">-</div>
-              <div class="mono">Config Snapshot</div>
-              <textarea id="configSnapshot" rows="8" readonly></textarea>
+      <section class="view" id="viewCampaigns">
+        <div class="stack">
+          <div class="card stack">
+            <h3>Create Campaign</h3>
+            <input id="campaignName" placeholder="Campaign name" />
+            <input id="campaignTemplate" placeholder="Template name" />
+            <input id="campaignRecipients" placeholder="Recipients comma-separated" />
+            <input id="campaignSchedule" type="datetime-local" />
+            <button class="btnPrimary" id="createCampaignBtn">Create</button>
+          </div>
+          <div class="card">
+            <h3>Campaigns</h3>
+            <div id="campaignList"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="viewSettings">
+        <div class="stack">
+          <div class="card stack">
+            <h3>Meta Credentials</h3>
+            <input id="metaToken" type="password" placeholder="Access token" />
+            <input id="metaPhoneId" placeholder="Phone number ID" />
+            <input id="metaWabaId" placeholder="WABA ID" />
+            <div id="metaTokenHint" class="mono">No token saved</div>
+            <div class="row">
+              <button class="btnPrimary" id="saveMetaBtn">Save</button>
+              <button class="btnGhost" id="reloadMetaBtn">Reload</button>
             </div>
           </div>
-        </section>
-      </main>
-    </div>
-    <div class="toasts" id="toasts" aria-live="polite"></div>
+          <div class="card stack">
+            <h3>Meta Resources</h3>
+            <button class="btnGhost" id="openMetaBizBtn">Business Settings</button>
+            <button class="btnGhost" id="copyMetaCmdBtn">Copy CLI Cmd</button>
+            <div style="border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--panel-soft);">
+              <div style="font-weight:700; margin-bottom:6px;">How to enable AI (Ollama) - simple steps</div>
+              <div class="mono" style="line-height:1.6;">
+                1) Open Ollama app on your computer.<br/>
+                2) In this page set Provider = <strong>Ollama (Local)</strong>.<br/>
+                3) Keep Base URL as <strong>http://127.0.0.1:11434/v1</strong>.<br/>
+                4) Model: <strong>deepseek-coder-v2:16b</strong> (or any model you installed).<br/>
+                5) Click <strong>Save AI Pref</strong>.<br/>
+                6) Go to Chat and send: <strong>whoami</strong> or <strong>show templates</strong>.
+              </div>
+              <div class="mono" style="line-height:1.6; margin-top:8px;">
+                OpenRouter option: set Provider = <strong>OpenRouter</strong>, paste API Key,<br/>
+                Base URL = <strong>https://openrouter.ai/api/v1</strong>, Model = e.g. <strong>openai/gpt-4o-mini</strong>.
+              </div>
+            </div>
+            <button class="btnGhost" id="saveAiBtn">Save AI Pref</button>
+            <select id="aiProvider">
+              <option value="openai">OpenAI Compatible</option>
+              <option value="ollama">Ollama (Local)</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="xai">xAI</option>
+              <option value="openrouter">OpenRouter</option>
+            </select>
+            <input id="aiApiKey" type="password" placeholder="API Key (required for OpenRouter/OpenAI/Anthropic/xAI)" />
+            <input id="aiBaseUrl" value="http://127.0.0.1:11434/v1" placeholder="AI Base URL" />
+            <input id="aiModel" value="deepseek-coder-v2:16b" />
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
 
-    <script>
+  <div id="toasts"></div>
+
+  <div id="compatGhost" style="display:none" aria-hidden="true">
+    <span id="sMissed">-</span><span id="sLeads">-</span><span id="sResp">-</span><span id="sReengaged">-</span><span id="sQualified">-</span>
+  </div>
+
+<script>
       const HIGH_RISK = new Set(["message.send_text", "template.send", "schedule.add_text", "schedule.add_template", "lead.schedule_followup", "lead.escalate_human"]);
       const MEDIUM_RISK = new Set(["lead.tag", "schedule.run_due"]);
 
@@ -516,8 +397,22 @@
         }
       };
 
+      const META_TOKEN_URL = "https://business.facebook.com/latest/settings/system_users";
+      const META_APP_URL = "https://developers.facebook.com/apps/";
       const $ = (id) => document.getElementById(id);
       const chatLog = $("chatLog");
+      try {
+        const themeBtn = document.querySelector(".theme-toggle");
+        if (localStorage.getItem("theme") === "dark") {
+          document.documentElement.classList.add("dark");
+        }
+        if (themeBtn) {
+          themeBtn.onclick = () => {
+            document.documentElement.classList.toggle("dark");
+            localStorage.setItem("theme", document.documentElement.classList.contains("dark") ? "dark" : "light");
+          };
+        }
+      } catch {}
 
       function toast(type, message) {
         const host = $("toasts");
@@ -991,6 +886,9 @@
         $("webhookUrl").textContent = String(cfg?.webhookUrl || cfg?.webhook_url || "Not configured");
         $("gatewayHealth").textContent = health?.ok ? "Healthy" : "Unknown";
         $("configSnapshot").value = JSON.stringify(cfg || {}, null, 2);
+        if (cfg?.aiProvider) $("aiProvider").value = cfg.aiProvider;
+        if (cfg?.aiModel) $("aiModel").value = cfg.aiModel;
+        if (cfg?.aiBaseUrl) $("aiBaseUrl").value = cfg.aiBaseUrl;
         await refreshMetaCredentials();
       }
 
@@ -1028,6 +926,9 @@
           const cfg = await api("/api/config");
           if (cfg?.activeClient) $("clientInput").value = cfg.activeClient;
           if (cfg?.language) $("langInput").value = cfg.language;
+          if (cfg?.aiProvider) $("aiProvider").value = cfg.aiProvider;
+          if (cfg?.aiModel) $("aiModel").value = cfg.aiModel;
+          if (cfg?.aiBaseUrl) $("aiBaseUrl").value = cfg.aiBaseUrl;
         } catch {}
       }
 
@@ -1038,7 +939,34 @@
           const obj = JSON.parse(raw);
           if (obj?.provider) $("aiProvider").value = obj.provider;
           if (obj?.model) $("aiModel").value = obj.model;
+          if (obj?.baseUrl) $("aiBaseUrl").value = obj.baseUrl;
         } catch {}
+      }
+
+      async function saveAiSettings() {
+        const provider = $("aiProvider").value;
+        const model = $("aiModel").value.trim();
+        const baseUrl = $("aiBaseUrl").value.trim();
+        const apiKey = $("aiApiKey").value.trim();
+        if (!model) {
+          toast("warn", "Model is required.");
+          return;
+        }
+        if (provider !== "ollama" && !apiKey) {
+          toast("warn", "API key is required for this provider.");
+          return;
+        }
+        const out = await api("/api/config/ai", {
+          method: "POST",
+          body: { provider, model, baseUrl, apiKey }
+        });
+        localStorage.setItem("waba.ai.settings", JSON.stringify({ provider, model, baseUrl }));
+        toast("ok", "AI settings saved to backend.");
+        $("aiApiKey").value = "";
+        if (out?.aiProvider) $("aiProvider").value = out.aiProvider;
+        if (out?.aiModel) $("aiModel").value = out.aiModel;
+        if (out?.aiBaseUrl) $("aiBaseUrl").value = out.aiBaseUrl;
+        await refreshSettings();
       }
 
       $("startBtn").onclick = () => startSession().then(() => setView("chat")).catch(err => toast("err", err.message));
@@ -1049,13 +977,30 @@
       $("execAllBtn").onclick = () => executeAll().catch(err => toast("err", err.message));
       $("clearActionsBtn").onclick = () => { state.actions = []; renderActions(); toast("warn", "Queue cleared locally."); };
       $("createCampaignBtn").onclick = () => createCampaign().catch(err => toast("err", err.message));
-      $("saveAiBtn").onclick = () => {
-        localStorage.setItem("waba.ai.settings", JSON.stringify({ provider: $("aiProvider").value, model: $("aiModel").value }));
-        toast("ok", "Saved local AI settings.");
-      };
+      $("saveAiBtn").onclick = () => saveAiSettings().catch(err => toast("err", err.message));
       $("reloadSettingsBtn").onclick = () => refreshSettings().catch(err => toast("err", err.message));
       $("saveMetaBtn").onclick = () => saveMetaCredentials().catch(err => toast("err", err.message));
       $("reloadMetaBtn").onclick = () => refreshMetaCredentials().catch(err => toast("err", err.message));
+      $("openMetaAppBtn").onclick = () => window.open(META_APP_URL, "_blank", "noopener");
+      $("openMetaApiBtn").onclick = () => window.open(META_TOKEN_URL, "_blank", "noopener");
+      $("openMetaBizBtn").onclick = () => window.open("https://business.facebook.com/settings", "_blank", "noopener");
+      $("copyMetaCmdBtn").onclick = async () => {
+        const client = $("clientInput").value.trim() || "default";
+        const cmd = `waba clients add ${client} --token "<TOKEN>" --phone-id "<PHONE_ID>" --business-id "<WABA_ID>" --switch`;
+        try {
+          if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(cmd);
+          toast("ok", "Meta setup command copied.");
+        } catch {
+          toast("warn", "Clipboard unavailable. Command added to chat.");
+          addMessage("agent", cmd);
+        }
+      };
+      $("quickMetaLaunchBtn").onclick = () => {
+        setView("settings");
+        window.open(META_TOKEN_URL, "_blank", "noopener");
+      };
+      $("quickMetaLaunchTopBtn").onclick = () => $("quickMetaLaunchBtn").click();
+      $("quickMetaCmdBtn").onclick = () => $("copyMetaCmdBtn").click();
 
       $("openChatBtn").onclick = () => setView("chat");
       $("openCampaignsBtn").onclick = () => setView("campaigns");
@@ -1092,5 +1037,5 @@
         }
       })();
     </script>
-  </body>
+</body>
 </html>

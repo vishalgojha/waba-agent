@@ -7,7 +7,7 @@ const fs = require("fs-extra");
 const { ConversationContext } = require("../lib/chat/context");
 const { parseLeadAnnouncement, parseFollowupIntent, parseLanguageIntent } = require("../lib/chat/lead-handler");
 const { resolveRunAt } = require("../lib/chat/scheduler");
-const { getAiSetupHint } = require("../lib/chat/agent");
+const { WhatsAppAgent, getAiSetupHint } = require("../lib/chat/agent");
 
 test("lead handler parsers identify common intents", () => {
   const lead = parseLeadAnnouncement("I got 5 new leads from 99acres for ACME");
@@ -86,4 +86,24 @@ test("ai setup hint includes ollama + major hosted providers", () => {
   assert.match(hint, /OPENROUTER_API_KEY/);
   assert.match(hint, /OPENAI_BASE_URL/);
   assert.match(hint, /WABA_AI_PROVIDER/);
+});
+
+test("heuristic direct command parses whoami without AI", () => {
+  const ctx = new ConversationContext("acme", "en");
+  const agent = new WhatsAppAgent(ctx);
+  const out = agent.heuristicParse("whoami", null);
+  assert.ok(out);
+  assert.match(out.message, /Client: acme/);
+  assert.equal(Array.isArray(out.actions), true);
+  assert.equal(out.actions.length, 0);
+});
+
+test("heuristic direct command parses send welcome text with phone", () => {
+  const ctx = new ConversationContext("acme", "en");
+  const agent = new WhatsAppAgent(ctx);
+  const out = agent.heuristicParse("send welcome text to +91 98123 45678", null);
+  assert.ok(out);
+  assert.equal(out.actions.length, 1);
+  assert.equal(out.actions[0].tool, "message.send_text");
+  assert.equal(out.actions[0].params.to, "+919812345678");
 });

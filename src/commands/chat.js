@@ -6,6 +6,7 @@ const { logger } = require("../lib/logger");
 const { ChatSession } = require("../lib/chat/session");
 const { PersistentMemory } = require("../lib/chat/memory");
 const { safeClientName } = require("../lib/creds");
+const { ensureOllamaRunning } = require("../lib/ai/ollama-autostart");
 
 function printHistory(rows) {
   if (!rows.length) {
@@ -35,6 +36,7 @@ function registerChatCommands(program) {
       if (root.opts().json) throw new Error("--json is not supported for interactive chat.");
 
       const cfg = await getConfig();
+      await ensureOllamaRunning({ cfg, logger });
       const client = safeClientName(opts.client || cfg.activeClient || "default");
       let sessionId = opts.session || null;
       if (!sessionId && opts.resume) {
@@ -57,6 +59,7 @@ function registerChatCommands(program) {
     .option("--limit <n>", "max sessions", (v) => Number(v), 20)
     .action(async (opts) => {
       const cfg = await getConfig();
+      await ensureOllamaRunning({ cfg, logger });
       const client = safeClientName(opts.client || cfg.activeClient || "default");
       const rows = await PersistentMemory.history({ client, limit: opts.limit });
       printHistory(rows);

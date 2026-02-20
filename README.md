@@ -81,6 +81,20 @@ npm.cmd link
 
 You now have `waba` and `waba-agent` on your PATH.
 
+If `npm link` fails on Windows due existing shim/permissions, run:
+
+```bash
+npm link --force
+```
+
+Repo-local npm aliases:
+
+```bash
+npm start
+npm run waba
+npm run waba -- gw -c acme-realty
+```
+
 Meta permissions you typically need on the token/app:
 
 - `whatsapp_business_messaging`
@@ -183,6 +197,13 @@ waba agent run "handle leads for real estate client" --client "acme-realty" --we
 ```bash
 waba chat --client acme-realty --lang en
 ```
+
+## AI Workflow
+
+For structured AI-assisted implementation and prompt iteration, use:
+
+- `docs/AI_RESPONSE_TEMPLATE.md`
+- `docs/PROMPT_EVOLUTION_TEMPLATE.md`
 
 ## TypeScript Control Plane (waba-ts)
 
@@ -895,6 +916,7 @@ Notes:
 - Supports provider selection via `WABA_AI_PROVIDER` = `openai|anthropic|xai|openrouter|ollama`.
 - `waba ai` and `waba chat` use whichever provider is configured.
 - If no hosted API key is available, `waba-agent` now defaults to local Ollama (`http://127.0.0.1:11434/v1`) with model `deepseek-coder-v2:16b` unless overridden.
+- `waba chat` and `waba gw` attempt local Ollama auto-start when configured for Ollama/local 11434 endpoint (disable with `WABA_OLLAMA_AUTOSTART=0`).
 - High-risk outbound actions always require confirmation.
 - If parsing is incomplete, CLI asks for missing fields.
 - If AI parsing fails, it falls back to local heuristic parsing and suggests a manual command.
@@ -957,6 +979,26 @@ Open:
 ```text
 http://127.0.0.1:3010/
 ```
+
+Frontend AI setup (Settings tab):
+
+1. Open `Settings` in gateway UI.
+2. Select provider (`Ollama (Local)` or `OpenRouter`).
+3. Fill:
+   - `API Key` (required for OpenRouter/OpenAI/Anthropic/xAI; not required for Ollama)
+   - `Base URL`
+   - `Model`
+4. Click `Save AI Pref`.
+5. Hard refresh once (`Ctrl+F5`).
+
+Recommended values:
+
+- Ollama:
+  - Base URL: `http://127.0.0.1:11434/v1`
+  - Model: any model from `ollama list`
+- OpenRouter:
+  - Base URL: `https://openrouter.ai/api/v1`
+  - Model examples: `openai/gpt-4o-mini`, `x-ai/grok-2`
 
 Custom UI override:
 

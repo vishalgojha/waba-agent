@@ -38,6 +38,7 @@
   "scripts": {
     "start": "node bin/waba.js",
     "waba": "node bin/waba.js",
+    "build": "tsc -p tsconfig.json",
     "start:ts": "tsx src-ts/index.ts",
     "build:ts:tmp": "node -e \"const fs=require('fs'); fs.rmSync('.tmp-ts',{recursive:true,force:true});\" && tsc -p tsconfig.tmp.json && node -e \"const fs=require('fs'); fs.writeFileSync('.tmp-ts/package.json', JSON.stringify({type:'module'}, null, 2));\"",
     "start:ts:compiled": "npm run build:ts:tmp && node .tmp-ts/src-ts/index.js",
@@ -47,19 +48,19 @@
     "test:tui:ts": "npm run build:ts:tmp && node .tmp-ts/src-ts/tests/tui-view-model.spec.js",
     "test:ts:spec": "npm run build:ts:tmp && node .tmp-ts/src-ts/tests/tui-view-model.spec.js && node .tmp-ts/src-ts/tests/replay-guard.spec.js && node .tmp-ts/src-ts/tests/doctor-policy.spec.js && node .tmp-ts/src-ts/tests/jaspers-playbook.spec.js && node .tmp-ts/src-ts/tests/tui-jaspers-command.spec.js && node .tmp-ts/src-ts/tests/tui-session-actions.spec.js && node .tmp-ts/src-ts/tests/tui-persist.spec.js && node .tmp-ts/src-ts/tests/tui-orchestrator.spec.js",
     "doctor:ts:strict": "npm run build:ts:tmp && node .tmp-ts/src-ts/index.js doctor --scope-check-mode strict --fail-on-warn --json",
-    "test": "node scripts/smoke.js",
-    "test:config": "node src/tests/config.test.js",
-    "test:readiness": "node src/tests/readiness.test.js",
-    "test:ai": "node src/tests/ai.test.js",
-    "test:chat": "node src/tests/chat.test.js",
-    "test:gateway": "node src/tests/gateway.test.js",
-    "test:hatch": "node src/tests/hatch.test.js",
-    "test:cli": "node src/tests/cli-autostart.test.js",
-    "test:start": "node src/tests/start.test.js && node src/tests/webhook-domain.test.js && node src/tests/jaspers-tool.test.js && node src/tests/demo.test.js && node src/tests/check.test.js && node src/tests/friendly-router.test.js && node src/tests/fix.test.js && node src/tests/panic.test.js && node src/tests/help-me.test.js && node src/tests/whoami.test.js && node src/tests/tour.test.js && node src/tests/storage.test.js",
-    "test:resale": "node src/tests/resale.test.js",
-    "validate:prod": "node scripts/validate-production.js",
-    "handoff:update": "node scripts/handoff-update.js",
-    "resale:activate": "node scripts/activate-resale-magic.js",
+    "test": "tsx scripts/smoke.ts",
+    "test:config": "tsx src/tests/config.test.ts",
+    "test:readiness": "tsx src/tests/readiness.test.ts",
+    "test:ai": "tsx src/tests/ai.test.ts",
+    "test:chat": "tsx src/tests/chat.test.ts",
+    "test:gateway": "tsx src/tests/gateway.test.ts",
+    "test:hatch": "tsx src/tests/hatch.test.ts",
+    "test:cli": "tsx src/tests/cli-autostart.test.ts",
+    "test:start": "tsx src/tests/start.test.ts && tsx src/tests/webhook-domain.test.ts && tsx src/tests/jaspers-tool.test.ts && tsx src/tests/demo.test.ts && tsx src/tests/check.test.ts && tsx src/tests/friendly-router.test.ts && tsx src/tests/fix.test.ts && tsx src/tests/panic.test.ts && tsx src/tests/help-me.test.ts && tsx src/tests/whoami.test.ts && tsx src/tests/tour.test.ts && tsx src/tests/storage.test.ts",
+    "test:resale": "tsx src/tests/resale.test.ts",
+    "validate:prod": "tsx scripts/validate-production.ts",
+    "handoff:update": "tsx scripts/handoff-update.ts",
+    "resale:activate": "tsx scripts/activate-resale-magic.ts",
     "storage:migrate-memory": "node bin/waba.js storage migrate-memory"
   },
   "dependencies": {
@@ -79,13 +80,13 @@
     "nodemailer": "^8.0.1",
     "ora": "^8.2.0",
     "razorpay": "^2.9.6",
-    "react": "^18.3.1"
+    "react": "^18.3.1",
+    "tsx": "^4.20.5"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^24.3.0",
     "@types/react": "^18.3.5",
-    "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }
 }

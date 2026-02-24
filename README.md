@@ -420,80 +420,80 @@ Global flags:
 ```
 waba-agent/
   bin/waba.js
-  src/index.js
+  src/index.ts
   src/commands/
-    ai.js
-    agent.js
-    chat.js
-    gateway.js
-    auth.js
-    analytics.js
-    autopilot.js
-    campaign.js
-    clients.js
-    cost.js
-    integrate.js
-    memory.js
-    onboard.js
-    optout.js
-    report.js
-    schedule.js
-    send.js
-    sync.js
-    template.js
-    webhook.js
+    ai.ts
+    agent.ts
+    chat.ts
+    gateway.ts
+    auth.ts
+    analytics.ts
+    autopilot.ts
+    campaign.ts
+    clients.ts
+    cost.ts
+    integrate.ts
+    memory.ts
+    onboard.ts
+    optout.ts
+    report.ts
+    schedule.ts
+    send.ts
+    sync.ts
+    template.ts
+    webhook.ts
   src/lib/
     chat/
-      session.js
-      context.js
-      agent.js
-      gateway.js
-      prompt.js
-      memory.js
-      scheduler.js
-      lead-handler.js
+      session.ts
+      context.ts
+      agent.ts
+      gateway.ts
+      prompt.ts
+      memory.ts
+      scheduler.ts
+      lead-handler.ts
     ai/
-      parser.js
-      validator.js
-      executor.js
+      parser.ts
+      validator.ts
+      executor.ts
       intents.json
     agent/ (planner + executor)
-    ai/openai.js
-    analytics.js
-    campaign-runner.js
-    campaign-store.js
-    client-config.js
-    clients.js
-    config.js
-    doctor.js
-    email.js
-    graph-error.js
-    http.js
-    logger.js
-    memory.js
-    duration.js
-    followup.js
-    message-parser.js
-    multimodal-stubs.js
-    optout-store.js
-    paths.js
-    prompt.js
-    redact.js
-    report.js
-    summary.js
-    schedule-store.js
-    template-drafts.js
-    tools.js
+    ai/openai.ts
+    analytics.ts
+    campaign-runner.ts
+    campaign-store.ts
+    client-config.ts
+    clients.ts
+    config.ts
+    doctor.ts
+    email.ts
+    graph-error.ts
+    http.ts
+    logger.ts
+    memory.ts
+    duration.ts
+    followup.ts
+    message-parser.ts
+    multimodal-stubs.ts
+    optout-store.ts
+    paths.ts
+    prompt.ts
+    redact.ts
+    report.ts
+    summary.ts
+    schedule-store.ts
+    template-drafts.ts
+    tools.ts
     ui/
-      confirm.js
-      format.js
+      confirm.ts
+      format.ts
     tools/ (registry + builtins)
     webhook/ (server + signature + parse + payloads)
-    whatsapp.js
+    whatsapp.ts
   src/server/
-    analytics.js
-    gateway.js
-    webhook.js
+    analytics.ts
+    gateway.ts
+    webhook.ts
 ```
 
 ## Auth + Security Notes

@@ -5,5 +5,5 @@
     "moduleResolution": "Bundler",
     "outDir": ".tmp-ts"
   },
-  "include": ["src-ts/**/*", "src/tui/**/*"]
+  "include": ["src/**/*", "src-ts/**/*", "scripts/**/*", "domain/**/*"]
 }

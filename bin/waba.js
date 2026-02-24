@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 
-require("../src/index");
+require("tsx/cjs");
+require("../src/index.ts");
 
